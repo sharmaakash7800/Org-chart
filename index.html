@@ -308,7 +308,6 @@
 </head>
 <body>
 
-  <!-- मुख्य नेविगेशन -->
   <div class="main-navbar">
     <div class="view-tabs">
       <button id="tabVisual" class="tab-btn active" onclick="switchMainView('visual')">🗂️ 1. Visual Org Chart</button>
@@ -319,7 +318,6 @@
     </div>
   </div>
 
-  <!-- विज़ुअल टूलबार -->
   <div class="toolbar" id="visualToolbar">
     <div class="controls">
       <select id="deptSelect" onchange="applyFilter(this.value)">
@@ -347,7 +345,6 @@
     </div>
   </div>
 
-  <!-- टेक्स्ट टूलबार -->
   <div class="toolbar" id="textToolbar" style="display: none;">
     <div class="controls"><span style="color:#58a6ff; font-weight:bold; font-size:13px;">🌲 Monospace Tree Mode</span></div>
     <div class="controls">
@@ -357,7 +354,6 @@
     </div>
   </div>
 
-  <!-- चार्ट कंटेनर -->
   <div id="visualViewContainer">
     <div id="loadingOverlay">⏳ Connecting to Google Sheet...</div>
     <svg id="chart_svg"></svg>
@@ -366,7 +362,7 @@
   <div id="textViewContainer"></div>
   <div id="printBookletContainer"></div>
 
-  <!-- पासवर्ड प्रमाणीकरण मोडल -->
+  <!-- AUTH MODAL -->
   <div id="authModal" class="modal-overlay">
     <div class="modal-box" style="width: 320px;">
       <h3>🔒 Admin Verification</h3>
@@ -381,7 +377,7 @@
     </div>
   </div>
 
-  <!-- एडिट मोडल -->
+  <!-- EDIT MODAL -->
   <div id="editModal" class="modal-overlay">
     <div class="modal-box">
       <h3>⚙️ Manage Team Member</h3>
@@ -401,7 +397,7 @@
     </div>
   </div>
 
-  <!-- ऐड मोडल -->
+  <!-- ADD MODAL -->
   <div id="addModal" class="modal-overlay">
     <div class="modal-box">
       <h3 id="addModalHeading">➕ Add New Member</h3>
@@ -416,8 +412,8 @@
   </div>
 
   <script>
-    // ================= LIVE APPS SCRIPT URL =================
-    const SCRIPT_API_URL = "https://script.google.com/macros/s/AKfycbxQE0Rn-C35D7Gso63YNdwUIJcPfrVPk_1f7FqDl6k4SSxXdu9mhNsw2WCsZllSsqARPaQ/exec";
+    // ================= UPDATED LIVE APPS SCRIPT URL =================
+    const SCRIPT_API_URL = "https://script.google.com/macros/s/AKfycbwXb2ifwYkAU7jLMU_n6Z8J6UXlUnZIkXhQ4PxZXOw-yDpXc1UOIv3d4jzmzRVbf3GmrA/exec";
 
     let rawSheetData = [];
     let currentActiveView = 'visual';
@@ -436,7 +432,7 @@
         rawSheetData = result.data;
         drawChart(buildDataTree("ALL"));
       } else {
-        alert("डेटा लोड नहीं हो पाया! कृपया Google Apps Script डिप्लॉयमेंट चेक करें।");
+        alert("डेटा लोड नहीं हो पाया! कृपया Google Apps Script चेक करें।");
       }
     };
 
@@ -448,7 +444,7 @@
       script.id = "jsonp_script";
       script.src = SCRIPT_API_URL + (SCRIPT_API_URL.includes("?") ? "&" : "?") + "callback=handleSheetData&t=" + new Date().getTime();
       script.onerror = function() {
-        document.getElementById("loadingOverlay").innerText = "❌ Connection Failed! Check Script URL.";
+        document.getElementById("loadingOverlay").innerText = "❌ Connection Failed! Check Web App deployment.";
       };
       document.body.appendChild(script);
     }
@@ -1042,7 +1038,7 @@
       setTimeout(() => window.print(), 500);
     }
 
-    // ऑटो-स्टार्ट
+    // स्वचालित डेटा फ़ेच
     fetchSheetData();
   </script>
 </body>
