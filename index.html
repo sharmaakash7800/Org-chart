@@ -216,20 +216,25 @@
     let savedAdminPin = sessionStorage.getItem("mgc_admin_pin") || "";
     let pendingEditNode = null;
 
-    // Google Sheet से लाइव डेटा लोड करना
-    async function fetchSheetData() {
-      try {
-        const res = await fetch(SCRIPT_API_URL);
-        const result = await res.json();
-        if (result.success) {
-          rawSheetData = result.data;
-          drawChart(buildDataTree("ALL"));
-        }
-      } catch (err) {
-        alert("डेटा लोड करने में समस्या: कृपया सुनिश्चित करें कि Web App access 'Anyone' पर है।");
-      }
+  // Google Sheet से लाइव डेटा लोड करना (CORS Safe)
+async function fetchSheetData() {
+  try {
+    const res = await fetch(SCRIPT_API_URL, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      redirect: 'follow'
+    });
+    const result = await res.json();
+    if (result.success && result.data && result.data.length > 0) {
+      rawSheetData = result.data;
+      drawChart(buildDataTree("ALL"));
+    } else {
+      console.warn("No data returned:", result);
     }
-
+  } catch (err) {
+    console.error("Fetch Error:", err);
+  }
+}
     function updateLockUI() {
       const badge = document.getElementById("adminLockBadge");
       const icon = document.getElementById("lockIcon");
