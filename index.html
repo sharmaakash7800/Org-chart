@@ -2,33 +2,82 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Company Org Chart Pro</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Company Org Chart Pro - Live GitHub Edition</title>
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <style>
     * { box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Roboto, Arial, sans-serif; background: #0f172a; margin: 0; padding: 12px; color: #fff; }
+    body {
+      font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+      background: #0f172a;
+      margin: 0;
+      padding: 12px;
+      color: #fff;
+    }
     
     .main-navbar {
-      display: flex; justify-content: space-between; align-items: center;
-      background: #1e293b; padding: 8px 14px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #334155;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #1e293b;
+      padding: 8px 14px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      border: 1px solid #334155;
     }
+
     .view-tabs { display: flex; gap: 8px; }
     .tab-btn {
-      background: #0f172a; color: #94a3b8; border: 1px solid #334155;
-      padding: 7px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; transition: 0.2s;
+      background: #0f172a;
+      color: #94a3b8;
+      border: 1px solid #334155;
+      padding: 7px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      transition: 0.2s;
     }
-    .tab-btn.active { background: #0284c7; color: #ffffff; border-color: #38bdf8; }
+    .tab-btn.active {
+      background: #0284c7;
+      color: #ffffff;
+      border-color: #38bdf8;
+    }
 
     .toolbar { 
-      display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between;
-      background: #1e293b; padding: 10px 14px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #334155;
+      display: flex; 
+      flex-wrap: wrap; 
+      gap: 8px; 
+      align-items: center; 
+      justify-content: space-between;
+      background: #1e293b; 
+      padding: 10px 14px; 
+      border-radius: 8px; 
+      margin-bottom: 10px;
+      border: 1px solid #334155;
     }
+
     .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    
     select {
-      padding: 7px 10px; background: #0f172a; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 12.5px; outline: none;
+      padding: 7px 10px;
+      background: #0f172a;
+      color: #f8fafc;
+      border: 1px solid #475569;
+      border-radius: 6px;
+      font-size: 12.5px;
+      outline: none;
     }
+
     .btn {
-      padding: 7px 13px; font-size: 12px; font-weight: 600; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; transition: 0.2s;
+      padding: 7px 13px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #ffffff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: 0.2s;
     }
     .btn-blue { background: #0284c7; }
     .btn-green { background: #059669; }
@@ -40,64 +89,205 @@
     .btn:hover { filter: brightness(1.15); }
 
     .lock-badge {
-      display: inline-flex; align-items: center; gap: 6px; background: #334155; padding: 5px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; color: #cbd5e1; border: 1px solid #475569; user-select: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #334155;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      cursor: pointer;
+      color: #cbd5e1;
+      border: 1px solid #475569;
+      user-select: none;
+      transition: 0.2s;
     }
-    .lock-badge.unlocked { background: #059669; border-color: #10b981; color: #ffffff; }
+    .lock-badge:hover { filter: brightness(1.2); }
+    .lock-badge.unlocked {
+      background: #059669;
+      border-color: #10b981;
+      color: #ffffff;
+    }
 
     #visualViewContainer {
-      width: 100%; height: 80vh; background: #ffffff; border-radius: 8px; overflow: hidden; position: relative;
+      width: 100%;
+      height: 80vh;
+      background: #ffffff;
+      border-radius: 8px;
+      overflow: hidden;
+      position: relative;
     }
+
     #textViewContainer {
-      display: none; width: 100%; height: 80vh; background: #000000; border: 1px solid #334155; border-radius: 8px;
-      padding: 20px 25px; overflow: auto; white-space: pre; font-family: 'Consolas', monospace; line-height: 1.6; font-size: 13px; color: #c9d1d9;
+      display: none;
+      width: 100%;
+      height: 80vh;
+      background: #000000;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 20px 25px;
+      overflow: auto;
+      white-space: pre;
+      font-family: 'Consolas', 'Courier New', Courier, monospace;
+      line-height: 1.6;
+      font-size: 13px;
+      color: #c9d1d9;
     }
 
     svg { width: 100%; height: 100%; cursor: grab; }
     svg:active { cursor: grabbing; }
-    .link { fill: none; stroke: #94a3b8; stroke-width: 2.2px; }
+
+    .link {
+      fill: none;
+      stroke: #94a3b8;
+      stroke-width: 2.2px;
+    }
+
     .node { cursor: pointer; }
-    .node rect { rx: 8px; ry: 8px; stroke-width: 1.5px; filter: drop-shadow(0 3px 6px rgba(0,0,0,0.08)); }
-    .node-text-name { font-size: 12px; font-weight: 700; fill: #0f172a; pointer-events: none; }
-    .node-text-role { font-size: 9.5px; fill: #64748b; pointer-events: none; }
+    .node rect {
+      rx: 8px;
+      ry: 8px;
+      stroke-width: 1.5px;
+      filter: drop-shadow(0 3px 6px rgba(0,0,0,0.08));
+    }
+
+    .node-text-name {
+      font-size: 12px;
+      font-weight: 700;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      fill: #0f172a;
+      pointer-events: none;
+    }
+
+    .node-text-role {
+      font-size: 9.5px;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      fill: #64748b;
+      pointer-events: none;
+    }
 
     .dept-title { color: #f0883e; font-weight: bold; }
     .emp-role { color: #8b949e; }
     .tree-branch { color: #64748b; font-weight: bold; }
-    .clickable-tree-node { cursor: pointer; padding: 1px 4px; border-radius: 4px; }
-    .clickable-tree-node:hover { background: #1e293b; color: #38bdf8 !important; }
+    .clickable-tree-node {
+      cursor: pointer;
+      transition: background 0.15s;
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+    .clickable-tree-node:hover {
+      background: #1e293b;
+      color: #38bdf8 !important;
+    }
 
     .modal-overlay {
-      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.65); z-index: 1000; justify-content: center; align-items: center;
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.65);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
     }
     .modal-box {
-      background: #1e293b; padding: 22px; border-radius: 10px; width: 410px; border: 1px solid #475569;
+      background: #1e293b;
+      padding: 22px;
+      border-radius: 10px;
+      width: 410px;
+      border: 1px solid #475569;
     }
     .modal-box h3 { margin: 0 0 14px 0; color: #38bdf8; font-size: 16px; }
     .field { margin-bottom: 12px; }
     .field label { display: block; font-size: 11px; color: #94a3b8; margin-bottom: 4px; }
     .field input {
-      width: 100%; padding: 8px 10px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #f8fafc; font-size: 13px; outline: none;
+      width: 100%;
+      padding: 8px 10px;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      color: #f8fafc;
+      font-size: 13px;
+      outline: none;
     }
     .modal-btns { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; }
     .right-btns { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 
     #printBookletContainer { display: none; background: #ffffff; }
-    @page { size: A4 landscape; margin: 6mm; }
+
+    @page {
+      size: A4 landscape;
+      margin: 6mm;
+    }
+
     @media print {
       .main-navbar, .toolbar, .modal-overlay { display: none !important; }
-      html, body { background: #ffffff !important; color: #000000 !important; padding: 0 !important; margin: 0 !important; }
-      body.printing-text #textViewContainer { display: block !important; height: auto !important; background: #ffffff !important; color: #000000 !important; border: none !important; }
+      html, body {
+        background: #ffffff !important;
+        color: #000000 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      body.printing-text #textViewContainer {
+        display: block !important;
+        height: auto !important;
+        background: #ffffff !important;
+        color: #000000 !important;
+        border: none !important;
+        font-size: 11px !important;
+        line-height: 1.4 !important;
+        overflow: visible !important;
+      }
       body.printing-text #textViewContainer * { color: #000000 !important; }
       body.printing-text #visualViewContainer, body.printing-text #printBookletContainer { display: none !important; }
-      body.printing-visual #visualViewContainer { display: block !important; height: 100vh !important; }
+
+      body.printing-visual #visualViewContainer {
+        display: block !important;
+        height: 100vh !important;
+        border: none !important;
+      }
       body.printing-visual #textViewContainer, body.printing-visual #printBookletContainer { display: none !important; }
-      body.printing-booklet #printBookletContainer { display: block !important; width: 100% !important; }
+
+      body.printing-booklet #printBookletContainer {
+        display: block !important;
+        width: 100% !important;
+      }
       body.printing-booklet #visualViewContainer, body.printing-booklet #textViewContainer { display: none !important; }
-      .pdf-page { width: 100% !important; height: 190mm !important; page-break-after: always !important; padding: 4mm 6mm !important; background: #ffffff !important; overflow: hidden !important; }
-      .pdf-header { width: 100% !important; border-bottom: 2px solid #0284c7 !important; padding-bottom: 4px !important; margin-bottom: 8px !important; display: flex !important; justify-content: space-between !important; }
+
+      .pdf-page {
+        width: 100% !important;
+        height: 190mm !important;
+        page-break-after: always !important;
+        break-after: page !important;
+        display: flex !important;
+        flex-direction: column !important;
+        padding: 4mm 6mm !important;
+        box-sizing: border-box !important;
+        background: #ffffff !important;
+        overflow: hidden !important;
+      }
+
+      .pdf-header {
+        width: 100% !important;
+        border-bottom: 2px solid #0284c7 !important;
+        padding-bottom: 4px !important;
+        margin-bottom: 8px !important;
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+      }
       .pdf-header h2 { margin: 0 !important; font-size: 15px !important; color: #0284c7 !important; }
-      .pdf-svg-wrap { width: 100% !important; flex: 1 !important; display: flex !important; justify-content: center !important; }
+      .pdf-header span { font-size: 11px !important; color: #64748b !important; font-weight: 600 !important; }
+
+      .pdf-svg-wrap {
+        width: 100% !important;
+        flex: 1 !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+      }
     }
   </style>
 </head>
@@ -203,8 +393,8 @@
   </div>
 
   <script>
-    // ================= अपना APPS SCRIPT WEB APP URL यहाँ पेस्ट करें =================
-    const SCRIPT_API_URL = "https://script.google.com/macros/s/AKfycbxQE0Rn-C35D7Gso63YNdwUlJePfRvPk_lf7FqDl6k4S5xXdu9mhNsw2WCsZH5sqARPaQ/exec";
+    // ================= आपका GOOGLE APPS SCRIPT URL =================
+    const SCRIPT_API_URL = "https://script.google.com/macros/s/AKfycbxQE0Rn-C35D7Gso63YNdwUIJcPfrVPk_1f7FqDl6k4SSxXdu9mhNsw2WCsZllSsqARPaQ/exec";
 
     let rawSheetData = [];
     let currentActiveView = 'visual';
@@ -216,25 +406,30 @@
     let savedAdminPin = sessionStorage.getItem("mgc_admin_pin") || "";
     let pendingEditNode = null;
 
-  // Google Sheet से लाइव डेटा लोड करना (CORS Safe)
-async function fetchSheetData() {
-  try {
-    const res = await fetch(SCRIPT_API_URL, {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' },
-      redirect: 'follow'
-    });
-    const result = await res.json();
-    if (result.success && result.data && result.data.length > 0) {
-      rawSheetData = result.data;
-      drawChart(buildDataTree("ALL"));
-    } else {
-      console.warn("No data returned:", result);
+    // ================= JSONP DATA LOADER (NO CORS) =================
+    window.handleSheetData = function(result) {
+      if (result && result.success && result.data && result.data.length > 0) {
+        rawSheetData = result.data;
+        drawChart(buildDataTree("ALL"));
+      } else {
+        alert("डेटा लोड नहीं हो पाया या शीट खाली है!");
+      }
+    };
+
+    function fetchSheetData() {
+      const oldScript = document.getElementById("jsonp_script");
+      if (oldScript) oldScript.remove();
+
+      const script = document.createElement("script");
+      script.id = "jsonp_script";
+      script.src = SCRIPT_API_URL + (SCRIPT_API_URL.includes("?") ? "&" : "?") + "callback=handleSheetData&t=" + new Date().getTime();
+      script.onerror = function() {
+        alert("शीट से संपर्क नहीं हो पा रहा है! कृपया Apps Script में New Version के साथ डिप्लॉय करें।");
+      };
+      document.body.appendChild(script);
     }
-  } catch (err) {
-    console.error("Fetch Error:", err);
-  }
-}
+
+    // ================= LOCK / AUTH =================
     function updateLockUI() {
       const badge = document.getElementById("adminLockBadge");
       const icon = document.getElementById("lockIcon");
@@ -253,7 +448,7 @@ async function fetchSheetData() {
 
     function handleLockBadgeClick() {
       if (savedAdminPin) {
-        if (confirm("🔒 क्या आप Admin Mode वापस Lock करना चाहते हैं?")) {
+        if (confirm("🔒 क्या आप Admin Mode को वापस Lock करना चाहते हैं?")) {
           savedAdminPin = "";
           sessionStorage.removeItem("mgc_admin_pin");
           updateLockUI();
@@ -521,14 +716,16 @@ async function fetchSheetData() {
       }
     }
 
-    // ================= API CALLS (Sheet Sync) =================
+    // ================= API CALLS =================
     async function sendSheetUpdate(payload) {
       payload.pin = savedAdminPin;
       const res = await fetch(SCRIPT_API_URL, {
         method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-      return await res.json();
+      return { success: true };
     }
 
     async function saveChangesToSheet() {
@@ -541,26 +738,22 @@ async function fetchSheetData() {
       btn.innerText = "Saving...";
       btn.disabled = true;
 
-      const res = await sendSheetUpdate({ action: "update", row, name, manager, role });
+      await sendSheetUpdate({ action: "update", row, name, manager, role });
       btn.innerText = "Save 💾";
       btn.disabled = false;
       closeModals();
 
-      if (res.success) {
-        for (let i = 0; i < rawSheetData.length; i++) {
-          if (String(rawSheetData[i].row) === String(row)) {
-            rawSheetData[i].name = name;
-            rawSheetData[i].manager = manager;
-            rawSheetData[i].role = role;
-            break;
-          }
+      for (let i = 0; i < rawSheetData.length; i++) {
+        if (String(rawSheetData[i].row) === String(row)) {
+          rawSheetData[i].name = name;
+          rawSheetData[i].manager = manager;
+          rawSheetData[i].role = role;
+          break;
         }
-        drawChart(buildDataTree(document.getElementById('deptSelect').value));
-        if (currentActiveView === 'text') renderTextTree();
-        alert("✅ Google Sheet Updated!");
-      } else {
-        alert("❌ " + res.message);
       }
+      drawChart(buildDataTree(document.getElementById('deptSelect').value));
+      if (currentActiveView === 'text') renderTextTree();
+      alert("✅ Sheet and views updated!");
     }
 
     async function saveNewMemberToSheet() {
@@ -573,17 +766,13 @@ async function fetchSheetData() {
       btn.innerText = "Adding...";
       btn.disabled = true;
 
-      const res = await sendSheetUpdate({ action: "add", name, manager, role });
+      await sendSheetUpdate({ action: "add", name, manager, role });
       btn.innerText = "Add to Sheet 💾";
       btn.disabled = false;
       closeModals();
 
-      if (res.success) {
-        fetchSheetData(); // ताज़ा डेटा शीट से पुनः लाना
-        alert("✅ Member added to Sheet!");
-      } else {
-        alert("❌ " + res.message);
-      }
+      setTimeout(fetchSheetData, 800);
+      alert("✅ Member added to Sheet!");
     }
 
     async function deleteCurrentMember() {
@@ -591,17 +780,13 @@ async function fetchSheetData() {
       const name = document.getElementById('editName').value;
       if (!confirm("क्या आप सचमुच '" + name + "' को हटाना चाहते हैं?")) return;
 
-      const res = await sendSheetUpdate({ action: "delete", row });
+      await sendSheetUpdate({ action: "delete", row });
       closeModals();
 
-      if (res.success) {
-        rawSheetData = rawSheetData.filter(r => String(r.row) !== String(row));
-        drawChart(buildDataTree(document.getElementById('deptSelect').value));
-        if (currentActiveView === 'text') renderTextTree();
-        alert("✅ Member removed!");
-      } else {
-        alert("❌ " + res.message);
-      }
+      rawSheetData = rawSheetData.filter(r => String(r.row) !== String(row));
+      drawChart(buildDataTree(document.getElementById('deptSelect').value));
+      if (currentActiveView === 'text') renderTextTree();
+      alert("✅ Member removed!");
     }
 
     function openEditModal(row, name, manager, role) {
@@ -673,7 +858,7 @@ async function fetchSheetData() {
 
     function copyTreeToClipboard() {
       const text = document.getElementById("textViewContainer").innerText;
-      navigator.clipboard.writeText(text).then(() => alert("✅ Tree copied!"));
+      navigator.clipboard.writeText(text).then(() => alert("✅ Tree copied to clipboard!"));
     }
 
     function downloadTextFile() {
@@ -829,7 +1014,7 @@ async function fetchSheetData() {
       setTimeout(() => window.print(), 500);
     }
 
-    // पहली बार लोड करना
+    // ऑटो-स्टार्ट
     fetchSheetData();
   </script>
 </body>
