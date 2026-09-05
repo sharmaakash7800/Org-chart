@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Company Org Chart Pro</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Roboto, Arial, sans-serif; background: #0f172a; margin: 0; padding: 12px; color: #fff; }
+    
+    .main-navbar {
+      display: flex; justify-content: space-between; align-items: center;
+      background: #1e293b; padding: 8px 14px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #334155;
+    }
+    .view-tabs { display: flex; gap: 8px; }
+    .tab-btn {
+      background: #0f172a; color: #94a3b8; border: 1px solid #334155;
+      padding: 7px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; transition: 0.2s;
+    }
+    .tab-btn.active { background: #0284c7; color: #ffffff; border-color: #38bdf8; }
+
+    .toolbar { 
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between;
+      background: #1e293b; padding: 10px 14px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #334155;
+    }
+    .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    select {
+      padding: 7px 10px; background: #0f172a; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 12.5px; outline: none;
+    }
+    .btn {
+      padding: 7px 13px; font-size: 12px; font-weight: 600; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; transition: 0.2s;
+    }
+    .btn-blue { background: #0284c7; }
+    .btn-green { background: #059669; }
+    .btn-equal { background: #0891b2; }
+    .btn-purple { background: #7c3aed; }
+    .btn-gray { background: #475569; }
+    .btn-red { background: #dc2626; }
+    .btn-booklet { background: #ea580c; font-weight: bold; }
+    .btn:hover { filter: brightness(1.15); }
+
+    .lock-badge {
+      display: inline-flex; align-items: center; gap: 6px; background: #334155; padding: 5px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; color: #cbd5e1; border: 1px solid #475569; user-select: none;
+    }
+    .lock-badge.unlocked { background: #059669; border-color: #10b981; color: #ffffff; }
+
+    #visualViewContainer {
+      width: 100%; height: 80vh; background: #ffffff; border-radius: 8px; overflow: hidden; position: relative;
+    }
+    #textViewContainer {
+      display: none; width: 100%; height: 80vh; background: #000000; border: 1px solid #334155; border-radius: 8px;
+      padding: 20px 25px; overflow: auto; white-space: pre; font-family: 'Consolas', monospace; line-height: 1.6; font-size: 13px; color: #c9d1d9;
+    }
+
+    svg { width: 100%; height: 100%; cursor: grab; }
+    svg:active { cursor: grabbing; }
+    .link { fill: none; stroke: #94a3b8; stroke-width: 2.2px; }
+    .node { cursor: pointer; }
+    .node rect { rx: 8px; ry: 8px; stroke-width: 1.5px; filter: drop-shadow(0 3px 6px rgba(0,0,0,0.08)); }
+    .node-text-name { font-size: 12px; font-weight: 700; fill: #0f172a; pointer-events: none; }
+    .node-text-role { font-size: 9.5px; fill: #64748b; pointer-events: none; }
+
+    .dept-title { color: #f0883e; font-weight: bold; }
+    .emp-role { color: #8b949e; }
+    .tree-branch { color: #64748b; font-weight: bold; }
+    .clickable-tree-node { cursor: pointer; padding: 1px 4px; border-radius: 4px; }
+    .clickable-tree-node:hover { background: #1e293b; color: #38bdf8 !important; }
+
+    .modal-overlay {
+      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.65); z-index: 1000; justify-content: center; align-items: center;
+    }
+    .modal-box {
+      background: #1e293b; padding: 22px; border-radius: 10px; width: 410px; border: 1px solid #475569;
+    }
+    .modal-box h3 { margin: 0 0 14px 0; color: #38bdf8; font-size: 16px; }
+    .field { margin-bottom: 12px; }
+    .field label { display: block; font-size: 11px; color: #94a3b8; margin-bottom: 4px; }
+    .field input {
+      width: 100%; padding: 8px 10px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #f8fafc; font-size: 13px; outline: none;
+    }
+    .modal-btns { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; }
+    .right-btns { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+
+    #printBookletContainer { display: none; background: #ffffff; }
+    @page { size: A4 landscape; margin: 6mm; }
+    @media print {
+      .main-navbar, .toolbar, .modal-overlay { display: none !important; }
+      html, body { background: #ffffff !important; color: #000000 !important; padding: 0 !important; margin: 0 !important; }
+      body.printing-text #textViewContainer { display: block !important; height: auto !important; background: #ffffff !important; color: #000000 !important; border: none !important; }
+      body.printing-text #textViewContainer * { color: #000000 !important; }
+      body.printing-text #visualViewContainer, body.printing-text #printBookletContainer { display: none !important; }
+      body.printing-visual #visualViewContainer { display: block !important; height: 100vh !important; }
+      body.printing-visual #textViewContainer, body.printing-visual #printBookletContainer { display: none !important; }
+      body.printing-booklet #printBookletContainer { display: block !important; width: 100% !important; }
+      body.printing-booklet #visualViewContainer, body.printing-booklet #textViewContainer { display: none !important; }
+      .pdf-page { width: 100% !important; height: 190mm !important; page-break-after: always !important; padding: 4mm 6mm !important; background: #ffffff !important; overflow: hidden !important; }
+      .pdf-header { width: 100% !important; border-bottom: 2px solid #0284c7 !important; padding-bottom: 4px !important; margin-bottom: 8px !important; display: flex !important; justify-content: space-between !important; }
+      .pdf-header h2 { margin: 0 !important; font-size: 15px !important; color: #0284c7 !important; }
+      .pdf-svg-wrap { width: 100% !important; flex: 1 !important; display: flex !important; justify-content: center !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="main-navbar">
+    <div class="view-tabs">
+      <button id="tabVisual" class="tab-btn active" onclick="switchMainView('visual')">🗂️ 1. Visual Org Chart</button>
+      <button id="tabText" class="tab-btn" onclick="switchMainView('text')">🌲 2. Monospace Text Tree</button>
+    </div>
+    <div class="lock-badge" id="adminLockBadge" onclick="handleLockBadgeClick()">
+      <span id="lockIcon">🔒</span> <span id="lockStatus">View Only (Click to Unlock)</span>
+    </div>
+  </div>
+
+  <div class="toolbar" id="visualToolbar">
+    <div class="controls">
+      <select id="deptSelect" onchange="applyFilter(this.value)">
+        <option value="ALL">🏢 All Departments (Complete Matrix)</option>
+        <option value="MDO">📁 1. MDO Office</option>
+        <option value="IT">💻 2. IT Division</option>
+        <option value="HR">👥 3. HR & Admin</option>
+        <option value="Projects-Mech">🏗️ 4. Projects (Mechanical & JV)</option>
+        <option value="Projects-Ops">⚙️ 5. Projects (Operations - Choubisa Ji)</option>
+        <option value="Procurement">🛒 6. Procurement & Purchase</option>
+        <option value="Store">📦 7. Store HO</option>
+        <option value="Finance">📊 8. Finance & Accounts</option>
+        <option value="Deepak-Lead">💼 9. Executive Lead (Deepak Gadiya)</option>
+        <option value="ECom-Sales">🚚 10. E-Commerce & Regional Sales (Akshita Maliwal)</option>
+        <option value="Delhi-Sales">📍 11. Direct Regional Sales (Delhi Sales)</option>
+      </select>
+      <button class="btn btn-purple" onclick="toggleOrientation()">🔄 Toggle Layout</button>
+      <button class="btn btn-gray" onclick="resetZoom()">🎯 Fit Screen</button>
+    </div>
+    <div class="controls">
+      <button class="btn btn-booklet" onclick="generateAllDeptsPDF()">📑 Download 11-Page PDF Booklet</button>
+      <button class="btn btn-blue" onclick="downloadCrispSVG()">✨ Download SVG</button>
+      <button class="btn btn-green" onclick="downloadHD_PNG()">🖼️ Download High-Res PNG</button>
+      <button class="btn btn-gray" onclick="printCurrentView()">📥 Print View</button>
+    </div>
+  </div>
+
+  <div class="toolbar" id="textToolbar" style="display: none;">
+    <div class="controls"><span style="color:#58a6ff; font-weight:bold; font-size:13px;">🌲 Monospace Tree Mode</span></div>
+    <div class="controls">
+      <button class="btn btn-blue" onclick="copyTreeToClipboard()">📋 Copy Tree Text</button>
+      <button class="btn btn-green" onclick="downloadTextFile()">💾 Download as .TXT</button>
+      <button class="btn btn-gray" onclick="printCurrentView()">📥 Print / Save PDF</button>
+    </div>
+  </div>
+
+  <div id="visualViewContainer"><svg id="chart_svg"></svg></div>
+  <div id="textViewContainer"></div>
+  <div id="printBookletContainer"></div>
+
+  <!-- AUTH MODAL -->
+  <div id="authModal" class="modal-overlay">
+    <div class="modal-box" style="width: 320px;">
+      <h3>🔒 Admin Verification</h3>
+      <div class="field">
+        <label>Enter Admin PIN:</label>
+        <input type="password" id="adminPinInput" placeholder="Enter PIN (Default: 1234)" onkeypress="if(event.key==='Enter') verifyAndUnlock()">
+      </div>
+      <div class="modal-btns" style="justify-content: flex-end; gap: 8px;">
+        <button class="btn btn-gray" onclick="closeModals()">Cancel</button>
+        <button class="btn btn-blue" onclick="verifyAndUnlock()">Unlock 🔓</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EDIT MODAL -->
+  <div id="editModal" class="modal-overlay">
+    <div class="modal-box">
+      <h3>⚙️ Manage Team Member</h3>
+      <input type="hidden" id="editRow">
+      <div class="field"><label>Employee Name:</label><input type="text" id="editName"></div>
+      <div class="field"><label>Reports To (Manager):</label><input type="text" id="editManager"></div>
+      <div class="field"><label>Designation / Role:</label><input type="text" id="editRole"></div>
+      <div class="modal-btns">
+        <button class="btn btn-red" id="delBtn" onclick="deleteCurrentMember()">🗑️ Delete</button>
+        <div class="right-btns">
+          <button class="btn btn-equal" onclick="openAddEqualMemberModal()">👥 Add Equal</button>
+          <button class="btn btn-green" onclick="openAddMemberModal()">➕ Add Down</button>
+          <button class="btn btn-blue" id="saveBtn" onclick="saveChangesToSheet()">Save 💾</button>
+          <button class="btn btn-gray" onclick="closeModals()">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD MODAL -->
+  <div id="addModal" class="modal-overlay">
+    <div class="modal-box">
+      <h3 id="addModalHeading">➕ Add New Member</h3>
+      <div class="field"><label id="addManagerLabel">Reports To (Manager):</label><input type="text" id="addManager" readonly style="opacity: 0.85;"></div>
+      <div class="field"><label>New Employee Name:</label><input type="text" id="addName"></div>
+      <div class="field"><label>Designation / Role:</label><input type="text" id="addRole"></div>
+      <div class="modal-btns" style="justify-content: flex-end; gap: 8px;">
+        <button class="btn btn-gray" onclick="closeModals()">Cancel</button>
+        <button class="btn btn-green" id="submitAddBtn" onclick="saveNewMemberToSheet()">Add to Sheet 💾</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ================= अपना APPS SCRIPT WEB APP URL यहाँ पेस्ट करें =================
+    const SCRIPT_API_URL = "https://script.google.com/macros/s/AKfycbyDhbgeE3JzwD9S6W2BE1-qhrO0ALdv2sKvjgGfK1-boHxLS7mScPke7D-JyN0fT7ZA/exec";
+
+    let rawSheetData = [];
+    let currentActiveView = 'visual';
+    let isHorizontal = true;
+    const svg = d3.select("#chart_svg");
+    const g = svg.append("g");
+    let zoomBehavior;
+    let currentTreeData;
+    let savedAdminPin = sessionStorage.getItem("mgc_admin_pin") || "";
+    let pendingEditNode = null;
+
+    // Google Sheet से लाइव डेटा लोड करना
+    async function fetchSheetData() {
+      try {
+        const res = await fetch(SCRIPT_API_URL);
+        const result = await res.json();
+        if (result.success) {
+          rawSheetData = result.data;
+          drawChart(buildDataTree("ALL"));
+        }
+      } catch (err) {
+        alert("डेटा लोड करने में समस्या: कृपया सुनिश्चित करें कि Web App access 'Anyone' पर है।");
+      }
+    }
+
+    function updateLockUI() {
+      const badge = document.getElementById("adminLockBadge");
+      const icon = document.getElementById("lockIcon");
+      const txt = document.getElementById("lockStatus");
+      if (savedAdminPin) {
+        badge.classList.add("unlocked");
+        icon.innerText = "🔓";
+        txt.innerText = "Admin Unlocked (Click to Lock)";
+      } else {
+        badge.classList.remove("unlocked");
+        icon.innerText = "🔒";
+        txt.innerText = "View Only (Click to Unlock)";
+      }
+    }
+    updateLockUI();
+
+    function handleLockBadgeClick() {
+      if (savedAdminPin) {
+        if (confirm("🔒 क्या आप Admin Mode वापस Lock करना चाहते हैं?")) {
+          savedAdminPin = "";
+          sessionStorage.removeItem("mgc_admin_pin");
+          updateLockUI();
+        }
+      } else {
+        promptAdminLogin();
+      }
+    }
+
+    function promptAdminLogin(node) {
+      if (savedAdminPin) return;
+      pendingEditNode = node || null;
+      document.getElementById("adminPinInput").value = "";
+      document.getElementById("authModal").style.display = "flex";
+      setTimeout(() => document.getElementById("adminPinInput").focus(), 150);
+    }
+
+    function verifyAndUnlock() {
+      const pin = document.getElementById("adminPinInput").value.trim();
+      if (!pin) return;
+      savedAdminPin = pin;
+      sessionStorage.setItem("mgc_admin_pin", pin);
+      updateLockUI();
+      closeModals();
+      if (pendingEditNode) {
+        openEditModal(pendingEditNode.row, pendingEditNode.name, pendingEditNode.manager, pendingEditNode.role);
+        pendingEditNode = null;
+      }
+    }
+
+    function handleNodeClick(row, name, manager, role) {
+      if (!savedAdminPin) {
+        promptAdminLogin({ row, name, manager, role });
+      } else {
+        openEditModal(row, name, manager, role);
+      }
+    }
+
+    function switchMainView(mode) {
+      currentActiveView = mode;
+      if (mode === 'visual') {
+        document.getElementById('visualViewContainer').style.display = 'block';
+        document.getElementById('visualToolbar').style.display = 'flex';
+        document.getElementById('textViewContainer').style.display = 'none';
+        document.getElementById('textToolbar').style.display = 'none';
+        document.getElementById('tabVisual').classList.add('active');
+        document.getElementById('tabText').classList.remove('active');
+        resetZoom();
+      } else {
+        document.getElementById('visualViewContainer').style.display = 'none';
+        document.getElementById('visualToolbar').style.display = 'none';
+        document.getElementById('textViewContainer').style.display = 'block';
+        document.getElementById('textToolbar').style.display = 'flex';
+        document.getElementById('tabVisual').classList.remove('active');
+        document.getElementById('tabText').classList.add('active');
+        renderTextTree();
+      }
+    }
+
+    function getColors(name, role) {
+      const s = (name + " " + role).toLowerCase();
+      if (s.includes("chairman") || s.includes("mahesh maliwal")) return { fill: "#f0f9ff", stroke: "#0284c7", top: "#0284c7" };
+      if (s.includes("mdo") || s.includes("ea")) return { fill: "#faf5ff", stroke: "#a855f7", top: "#9333ea" };
+      if (s.includes("it") || s.includes("admin") || s.includes("mis")) return { fill: "#eff6ff", stroke: "#3b82f6", top: "#2563eb" };
+      if (s.includes("hr")) return { fill: "#fdf2f8", stroke: "#ec4899", top: "#db2777" };
+      if (s.includes("project") || s.includes("engineer") || s.includes("mechanical") || s.includes("agm")) return { fill: "#fffbeb", stroke: "#f59e0b", top: "#d97706" };
+      if (s.includes("purchase") || s.includes("procurement")) return { fill: "#ecfdf5", stroke: "#10b981", top: "#059669" };
+      if (s.includes("store") || s.includes("inventory")) return { fill: "#f5f3ff", stroke: "#8b5cf6", top: "#7c3aed" };
+      if (s.includes("finance") || s.includes("account")) return { fill: "#f0fdf4", stroke: "#22c55e", top: "#16a34a" };
+      if (s.includes("cre")) return { fill: "#ecfeff", stroke: "#06b6d4", top: "#0891b2" };
+      if (s.includes("delhi")) return { fill: "#fdf4ff", stroke: "#c026d3", top: "#a21caf" };
+      if (s.includes("sales") || s.includes("logistics")) return { fill: "#fff7ed", stroke: "#f97316", top: "#ea580c" };
+      return { fill: "#ffffff", stroke: "#cbd5e1", top: "#64748b" };
+    }
+
+    function buildDataTree(filter) {
+      const nodes = [];
+      const nameToRowId = {};
+
+      for (let i = 0; i < rawSheetData.length; i++) {
+        const item = rawSheetData[i];
+        const key = item.name.toLowerCase();
+        if (!nameToRowId[key]) nameToRowId[key] = "node_" + item.row;
+      }
+
+      for (let i = 0; i < rawSheetData.length; i++) {
+        const item = rawSheetData[i];
+        const parentKey = item.manager.toLowerCase();
+        const parentNodeId = item.manager && nameToRowId[parentKey] ? nameToRowId[parentKey] : null;
+
+        nodes.push({
+          id: "node_" + item.row,
+          name: item.name,
+          manager: item.manager,
+          role: item.role,
+          row: item.row,
+          parentId: parentNodeId
+        });
+      }
+
+      const rootNode = nodes.find(n => !n.manager);
+      let selectedNodes = [];
+
+      if (filter === "ALL") {
+        selectedNodes = nodes;
+      } else {
+        let deptHeads = [];
+        if (filter === "MDO") deptHeads = nodes.filter(n => n.name.includes("Priyanka Sharma"));
+        else if (filter === "IT") deptHeads = nodes.filter(n => n.name.includes("Akash Sharma"));
+        else if (filter === "HR") deptHeads = nodes.filter(n => n.name.includes("Amzad Ji"));
+        else if (filter === "Projects-Mech") deptHeads = nodes.filter(n => n.name.includes("Saurabh Saboo"));
+        else if (filter === "Projects-Ops") deptHeads = nodes.filter(n => n.name.includes("R. S. Choubisa"));
+        else if (filter === "Procurement") deptHeads = nodes.filter(n => n.name.includes("Gopal Choubisa"));
+        else if (filter === "Store") deptHeads = nodes.filter(n => n.name.includes("MD Store Manager"));
+        else if (filter === "Finance") deptHeads = nodes.filter(n => n.name.includes("CA Milan Maru"));
+        else if (filter === "Deepak-Lead") deptHeads = nodes.filter(n => n.name.includes("Deepak Gadiya"));
+        else if (filter === "ECom-Sales") deptHeads = nodes.filter(n => n.name.includes("Akshita Maliwal"));
+        else if (filter === "Delhi-Sales") deptHeads = nodes.filter(n => n.name.includes("Gaurav Sharma") || n.name.includes("Vipul Chandel"));
+
+        const familySet = new Set(deptHeads.map(h => h.id));
+        let added = true;
+        while (added) {
+          added = false;
+          for (let j = 0; j < nodes.length; j++) {
+            if (nodes[j].parentId && familySet.has(nodes[j].parentId) && !familySet.has(nodes[j].id)) {
+              familySet.add(nodes[j].id);
+              added = true;
+            }
+          }
+        }
+        selectedNodes = nodes.filter(n => familySet.has(n.id));
+        if (rootNode && !familySet.has(rootNode.id)) selectedNodes.unshift(rootNode);
+      }
+
+      const validIds = new Set(selectedNodes.map(d => d.id));
+      const rootId = rootNode ? rootNode.id : selectedNodes[0].id;
+
+      selectedNodes.forEach(d => {
+        if (d.id !== rootId && (!d.parentId || !validIds.has(d.parentId))) {
+          d.parentId = rootId;
+        }
+      });
+
+      return d3.stratify().id(d => d.id).parentId(d => d.parentId)(selectedNodes);
+    }
+
+    function drawChart(treeData) {
+      currentTreeData = treeData;
+      g.selectAll("*").remove();
+
+      const nodeW = 200;
+      const nodeH = 75;
+
+      const treeLayout = isHorizontal ? 
+        d3.tree().nodeSize([nodeH + 25, nodeW + 55]) : 
+        d3.tree().nodeSize([nodeW + 35, nodeH + 50]);
+
+      treeLayout(treeData);
+
+      g.selectAll(".link")
+        .data(treeData.links())
+        .enter().append("path")
+        .attr("class", "link")
+        .attr("d", isHorizontal ? 
+          d3.linkHorizontal().x(d => d.y).y(d => d.x) : 
+          d3.linkVertical().x(d => d.x).y(d => d.y)
+        );
+
+      const node = g.selectAll(".node")
+        .data(treeData.descendants())
+        .enter().append("g")
+        .attr("class", "node")
+        .attr("transform", d => isHorizontal ? 
+          "translate(" + (d.y) + "," + (d.x - nodeH/2) + ")" : 
+          "translate(" + (d.x - nodeW/2) + "," + (d.y) + ")"
+        )
+        .on("click", (event, d) => handleNodeClick(d.data.row, d.data.name, d.data.manager, d.data.role));
+
+      node.append("rect")
+        .attr("width", nodeW)
+        .attr("height", nodeH)
+        .attr("fill", d => getColors(d.data.name, d.data.role).fill)
+        .attr("stroke", d => getColors(d.data.name, d.data.role).stroke);
+
+      node.append("rect")
+        .attr("width", nodeW)
+        .attr("height", 5)
+        .attr("fill", d => getColors(d.data.name, d.data.role).top);
+
+      node.append("text")
+        .attr("class", "node-text-name")
+        .attr("x", nodeW / 2)
+        .attr("y", 30)
+        .attr("text-anchor", "middle")
+        .text(d => d.data.name);
+
+      node.each(function(d) {
+        const el = d3.select(this);
+        const role = d.data.role || '';
+        if (role.length > 25) {
+          const words = role.split(" ");
+          const mid = Math.ceil(words.length / 2);
+          el.append("text").attr("class", "node-text-role").attr("x", nodeW / 2).attr("y", 48).attr("text-anchor", "middle").text(words.slice(0, mid).join(" "));
+          el.append("text").attr("class", "node-text-role").attr("x", nodeW / 2).attr("y", 62).attr("text-anchor", "middle").text(words.slice(mid).join(" "));
+        } else {
+          el.append("text").attr("class", "node-text-role").attr("x", nodeW / 2).attr("y", 52).attr("text-anchor", "middle").text(role);
+        }
+      });
+
+      resetZoom();
+    }
+
+    function renderTextTree() {
+      const childrenMap = {};
+      let root = null;
+
+      for (let i = 0; i < rawSheetData.length; i++) {
+        const item = rawSheetData[i];
+        const mgr = item.manager.trim().toLowerCase();
+        if (!mgr) {
+          root = item;
+        } else {
+          if (!childrenMap[mgr]) childrenMap[mgr] = [];
+          childrenMap[mgr].push(item);
+        }
+      }
+
+      function buildHtmlTree(node, prefix, isLast) {
+        let res = "";
+        const key = node.name.trim().toLowerCase();
+        const children = childrenMap[key] || [];
+        const roleStr = node.role ? " <span class='emp-role'>(" + node.role + ")</span>" : "";
+        const clickAction = "onclick=\\"handleNodeClick('" + node.row + "', '" + escape(node.name) + "', '" + escape(node.manager) + "', '" + escape(node.role) + "')\\"";
+
+        if (!prefix) {
+          res += "<span class='dept-title clickable-tree-node' " + clickAction + ">[ " + node.name + " - " + node.role + " ]</span>\\n";
+        } else {
+          const branch = isLast ? "└──► " : "├──► ";
+          res += "<span class='tree-branch'>" + prefix + branch + "</span>" +
+                 "<span class='clickable-tree-node' " + clickAction + "><strong>" + node.name + "</strong>" + roleStr + "</span>\\n";
+        }
+
+        for (let i = 0; i < children.length; i++) {
+          const child = children[i];
+          const lastChild = (i === children.length - 1);
+          const nextPrefix = prefix ? prefix + (isLast ? "      " : "│     ") : " │\\n ├──► ";
+
+          if (!prefix) {
+            res += "<span class='tree-branch'> │\\n</span>";
+            const childClick = "onclick=\\"handleNodeClick('" + child.row + "', '" + escape(child.name) + "', '" + escape(child.manager) + "', '" + escape(child.role) + "')\\"";
+            res += "<span class='tree-branch'> ├──► </span><span class='dept-title clickable-tree-node' " + childClick + ">[ " + child.name + (child.role ? " - " + child.role : "") + " ]</span>\\n";
+            const grand = childrenMap[child.name.trim().toLowerCase()] || [];
+            for (let j = 0; j < grand.length; j++) {
+              res += buildHtmlTree(grand[j], " │     ", j === grand.length - 1);
+            }
+          } else {
+            res += buildHtmlTree(child, nextPrefix, lastChild);
+          }
+        }
+        return res;
+      }
+
+      if (root) {
+        document.getElementById("textViewContainer").innerHTML = buildHtmlTree(root, "", true);
+      }
+    }
+
+    // ================= API CALLS (Sheet Sync) =================
+    async function sendSheetUpdate(payload) {
+      payload.pin = savedAdminPin;
+      const res = await fetch(SCRIPT_API_URL, {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      return await res.json();
+    }
+
+    async function saveChangesToSheet() {
+      const row = document.getElementById('editRow').value;
+      const name = document.getElementById('editName').value.trim();
+      const manager = document.getElementById('editManager').value.trim();
+      const role = document.getElementById('editRole').value.trim();
+
+      const btn = document.getElementById('saveBtn');
+      btn.innerText = "Saving...";
+      btn.disabled = true;
+
+      const res = await sendSheetUpdate({ action: "update", row, name, manager, role });
+      btn.innerText = "Save 💾";
+      btn.disabled = false;
+      closeModals();
+
+      if (res.success) {
+        for (let i = 0; i < rawSheetData.length; i++) {
+          if (String(rawSheetData[i].row) === String(row)) {
+            rawSheetData[i].name = name;
+            rawSheetData[i].manager = manager;
+            rawSheetData[i].role = role;
+            break;
+          }
+        }
+        drawChart(buildDataTree(document.getElementById('deptSelect').value));
+        if (currentActiveView === 'text') renderTextTree();
+        alert("✅ Google Sheet Updated!");
+      } else {
+        alert("❌ " + res.message);
+      }
+    }
+
+    async function saveNewMemberToSheet() {
+      const manager = document.getElementById('addManager').value;
+      const name = document.getElementById('addName').value.trim();
+      const role = document.getElementById('addRole').value.trim();
+      if (!name) return alert("नाम भरें!");
+
+      const btn = document.getElementById('submitAddBtn');
+      btn.innerText = "Adding...";
+      btn.disabled = true;
+
+      const res = await sendSheetUpdate({ action: "add", name, manager, role });
+      btn.innerText = "Add to Sheet 💾";
+      btn.disabled = false;
+      closeModals();
+
+      if (res.success) {
+        fetchSheetData(); // ताज़ा डेटा शीट से पुनः लाना
+        alert("✅ Member added to Sheet!");
+      } else {
+        alert("❌ " + res.message);
+      }
+    }
+
+    async function deleteCurrentMember() {
+      const row = document.getElementById('editRow').value;
+      const name = document.getElementById('editName').value;
+      if (!confirm("क्या आप सचमुच '" + name + "' को हटाना चाहते हैं?")) return;
+
+      const res = await sendSheetUpdate({ action: "delete", row });
+      closeModals();
+
+      if (res.success) {
+        rawSheetData = rawSheetData.filter(r => String(r.row) !== String(row));
+        drawChart(buildDataTree(document.getElementById('deptSelect').value));
+        if (currentActiveView === 'text') renderTextTree();
+        alert("✅ Member removed!");
+      } else {
+        alert("❌ " + res.message);
+      }
+    }
+
+    function openEditModal(row, name, manager, role) {
+      document.getElementById('editRow').value = row;
+      document.getElementById('editName').value = unescape(name);
+      document.getElementById('editManager').value = unescape(manager) || '';
+      document.getElementById('editRole').value = unescape(role) || '';
+      document.getElementById('delBtn').style.display = (!manager) ? 'none' : 'block';
+      document.getElementById('editModal').style.display = 'flex';
+    }
+
+    function closeModals() {
+      document.getElementById('editModal').style.display = 'none';
+      document.getElementById('addModal').style.display = 'none';
+      document.getElementById('authModal').style.display = 'none';
+    }
+
+    function openAddMemberModal() {
+      const managerName = document.getElementById('editName').value;
+      document.getElementById('editModal').style.display = 'none';
+      document.getElementById('addModalHeading').innerText = "➕ Add Subordinate Down";
+      document.getElementById('addManagerLabel').innerText = "Reports To (Direct Manager):";
+      document.getElementById('addManager').value = managerName;
+      document.getElementById('addName').value = '';
+      document.getElementById('addRole').value = '';
+      document.getElementById('addModal').style.display = 'flex';
+    }
+
+    function openAddEqualMemberModal() {
+      const currentManager = document.getElementById('editManager').value;
+      document.getElementById('editModal').style.display = 'none';
+      document.getElementById('addModalHeading').innerText = "👥 Add Equal Colleague (Same Level)";
+      document.getElementById('addManagerLabel').innerText = "Reports To (Shared Manager):";
+      document.getElementById('addManager').value = currentManager;
+      document.getElementById('addName').value = '';
+      document.getElementById('addRole').value = '';
+      document.getElementById('addModal').style.display = 'flex';
+    }
+
+    function resetZoom() {
+      const bounds = g.node().getBBox();
+      const parent = svg.node().parentElement;
+      const fullWidth = parent.clientWidth;
+      const fullHeight = parent.clientHeight;
+      if (bounds.width === 0 || bounds.height === 0) return;
+      const scale = 0.88 / Math.max(bounds.width / fullWidth, bounds.height / fullHeight);
+      const translate = [fullWidth / 2 - scale * (bounds.x + bounds.width / 2), fullHeight / 2 - scale * (bounds.y + bounds.height / 2)];
+      svg.transition().duration(500).call(zoomBehavior.transform, d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale));
+    }
+
+    zoomBehavior = d3.zoom().scaleExtent([0.05, 4]).on("zoom", (event) => g.attr("transform", event.transform));
+    svg.call(zoomBehavior);
+
+    function toggleOrientation() {
+      isHorizontal = !isHorizontal;
+      drawChart(currentTreeData);
+    }
+
+    function applyFilter(val) {
+      drawChart(buildDataTree(val));
+    }
+
+    function printCurrentView() {
+      document.body.className = '';
+      if (currentActiveView === 'text') document.body.classList.add('printing-text');
+      else document.body.classList.add('printing-visual');
+      setTimeout(() => window.print(), 100);
+    }
+
+    function copyTreeToClipboard() {
+      const text = document.getElementById("textViewContainer").innerText;
+      navigator.clipboard.writeText(text).then(() => alert("✅ Tree copied!"));
+    }
+
+    function downloadTextFile() {
+      const text = document.getElementById("textViewContainer").innerText;
+      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "Org_Tree.txt";
+      a.click();
+    }
+
+    function downloadCrispSVG() {
+      const bounds = g.node().getBBox();
+      const padding = 40;
+      const width = bounds.width + padding * 2;
+      const height = bounds.height + padding * 2;
+      const clonedSvg = document.getElementById("chart_svg").cloneNode(true);
+      clonedSvg.setAttribute("width", width);
+      clonedSvg.setAttribute("height", height);
+      clonedSvg.setAttribute("viewBox", (bounds.x - padding) + " " + (bounds.y - padding) + " " + width + " " + height);
+      clonedSvg.querySelector("g").removeAttribute("transform");
+      const serializer = new XMLSerializer();
+      const source = '<?xml version="1.0" standalone="no"?>\\r\\n' + serializer.serializeToString(clonedSvg);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([source], {type: "image/svg+xml;charset=utf-8"}));
+      a.download = "Org_Chart_Complete.svg";
+      a.click();
+    }
+
+    function downloadHD_PNG() {
+      const bounds = g.node().getBBox();
+      const padding = 40;
+      const width = bounds.width + padding * 2;
+      const height = bounds.height + padding * 2;
+      const clonedSvg = document.getElementById("chart_svg").cloneNode(true);
+      clonedSvg.setAttribute("width", width);
+      clonedSvg.setAttribute("height", height);
+      clonedSvg.setAttribute("viewBox", (bounds.x - padding) + " " + (bounds.y - padding) + " " + width + " " + height);
+      clonedSvg.querySelector("g").removeAttribute("transform");
+      const serializer = new XMLSerializer();
+      const img = new Image();
+      const url = URL.createObjectURL(new Blob([serializer.serializeToString(clonedSvg)], {type: 'image/svg+xml;charset=utf-8'}));
+      img.onload = function () {
+        const canvas = document.createElement('canvas');
+        const scale = 2;
+        canvas.width = width * scale;
+        canvas.height = height * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+        const a = document.createElement('a');
+        a.download = 'Org_Chart_HighRes.png';
+        a.href = canvas.toDataURL('image/png');
+        a.click();
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
+    }
+
+    function generateAllDeptsPDF() {
+      document.body.className = 'printing-booklet';
+      const depts = [
+        { id: "ALL", title: "1. Complete Company Hierarchy Overview" },
+        { id: "MDO", title: "2. MDO & Corporate Office" },
+        { id: "IT", title: "3. IT Division" },
+        { id: "HR", title: "4. HR & Administration" },
+        { id: "Projects-Mech", title: "5. Projects (Mechanical & JV Projects)" },
+        { id: "Projects-Ops", title: "6. Projects (Operations - Choubisa Ji)" },
+        { id: "Procurement", title: "7. Procurement & Purchase Department" },
+        { id: "Store", title: "8. Store & Inventory (Head Office)" },
+        { id: "Finance", title: "9. Finance & Accounts Department" },
+        { id: "Deepak-Lead", title: "10. Executive Lead (Deepak Gadiya Division)" },
+        { id: "ECom-Sales", title: "11. E-Commerce & Regional Sales (Akshita Maliwal)" },
+        { id: "Delhi-Sales", title: "12. Direct Regional Sales (Delhi Sales Team)" }
+      ];
+
+      const printContainer = document.getElementById("printBookletContainer");
+      printContainer.innerHTML = "";
+      const nodeW = 190;
+      const nodeH = 75;
+
+      depts.forEach((dept, index) => {
+        try {
+          const tree = buildDataTree(dept.id);
+          const pageDiv = document.createElement("div");
+          pageDiv.className = "pdf-page";
+          const header = document.createElement("div");
+          header.className = "pdf-header";
+          header.innerHTML = "<h2>" + dept.title + "</h2><span>Page " + (index + 1) + " of " + depts.length + "</span>";
+          pageDiv.appendChild(header);
+
+          const svgWrap = document.createElement("div");
+          svgWrap.className = "pdf-svg-wrap";
+          pageDiv.appendChild(svgWrap);
+
+          const pageSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          pageSvg.style.width = "100%";
+          pageSvg.style.height = "165mm";
+          svgWrap.appendChild(pageSvg);
+          printContainer.appendChild(pageDiv);
+
+          const svgSel = d3.select(pageSvg);
+          const gSel = svgSel.append("g");
+          const treeLayout = d3.tree().nodeSize([nodeW + 40, nodeH + 55]);
+          treeLayout(tree);
+
+          const descendants = tree.descendants();
+          let minX = Infinity, maxX = -Infinity;
+          let minY = Infinity, maxY = -Infinity;
+
+          descendants.forEach(d => {
+            if (d.x < minX) minX = d.x;
+            if (d.x > maxX) maxX = d.x;
+            if (d.y < minY) minY = d.y;
+            if (d.y > maxY) maxY = d.y;
+          });
+
+          gSel.selectAll(".link").data(tree.links()).enter().append("path").attr("class", "link")
+            .attr("d", d3.linkVertical().x(d => d.x).y(d => d.y + nodeH / 2));
+
+          const node = gSel.selectAll(".node").data(descendants).enter().append("g").attr("class", "node")
+            .attr("transform", d => "translate(" + (d.x - nodeW / 2) + "," + d.y + ")");
+
+          node.append("rect").attr("width", nodeW).attr("height", nodeH).attr("fill", d => getColors(d.data.name, d.data.role).fill).attr("stroke", d => getColors(d.data.name, d.data.role).stroke);
+          node.append("rect").attr("width", nodeW).attr("height", 5).attr("fill", d => getColors(d.data.name, d.data.role).top);
+          node.append("text").attr("class", "node-text-name").attr("x", nodeW / 2).attr("y", 30).attr("text-anchor", "middle").text(d => d.data.name);
+
+          node.each(function(d) {
+            const el = d3.select(this);
+            const role = d.data.role || '';
+            if (role.length > 25) {
+              const words = role.split(" ");
+              const mid = Math.ceil(words.length / 2);
+              el.append("text").attr("class", "node-text-role").attr("x", nodeW / 2).attr("y", 48).attr("text-anchor", "middle").text(words.slice(0, mid).join(" "));
+              el.append("text").attr("class", "node-text-role").attr("x", nodeW / 2).attr("y", 62).attr("text-anchor", "middle").text(words.slice(mid).join(" "));
+            } else {
+              el.append("text").attr("class", "node-text-role").attr("x", nodeW / 2).attr("y", 52).attr("text-anchor", "middle").text(role);
+            }
+          });
+
+          const paddingSide = 50;
+          const paddingTop = 60;
+          const paddingBottom = 40;
+          const totalWidth = (maxX - minX) + nodeW + (paddingSide * 2);
+          const totalHeight = (maxY - minY) + nodeH + paddingTop + paddingBottom;
+
+          pageSvg.setAttribute("viewBox", ((minX - nodeW / 2) - paddingSide) + " " + (minY - paddingTop) + " " + totalWidth + " " + totalHeight);
+          pageSvg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+        } catch(e) {}
+      });
+
+      setTimeout(() => window.print(), 500);
+    }
+
+    // पहली बार लोड करना
+    fetchSheetData();
+  </script>
+</body>
+</html>
