@@ -355,7 +355,7 @@
   </div>
 
   <div id="visualViewContainer">
-    <div id="loadingOverlay">⏳ Connecting to Google Sheet...</div>
+    <div id="loadingOverlay">⏳ Loading Google Sheet Data...</div>
     <svg id="chart_svg"></svg>
   </div>
 
@@ -412,8 +412,9 @@
   </div>
 
   <script>
-    // ================= UPDATED LIVE APPS SCRIPT URL =================
-    const SCRIPT_API_URL = "https://script.google.com/macros/s/AKfycbwXb2ifwYkAU7jLMU_n6Z8J6UXlUnZIkXhQ4PxZXOw-yDpXc1UOIv3d4jzmzRVbf3GmrA/exec";
+    // ================= PUBLIC CSV DIRECT CONNECTION =================
+    const SHEET_ID = "11eT4oPnRCsPO-SQg4k48wL_J0sYFk8_EkmL5E8X6w0";
+    const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Org_Chart`;
 
     let rawSheetData = [];
     let currentActiveView = 'visual';
@@ -425,28 +426,36 @@
     let savedAdminPin = sessionStorage.getItem("mgc_admin_pin") || "";
     let pendingEditNode = null;
 
-    // ================= JSONP DATA LOADER (NO CORS) =================
-    window.handleSheetData = function(result) {
-      document.getElementById("loadingOverlay").style.display = "none";
-      if (result && result.success && result.data && result.data.length > 0) {
-        rawSheetData = result.data;
-        drawChart(buildDataTree("ALL"));
-      } else {
-        alert("डेटा लोड नहीं हो पाया! कृपया Google Apps Script चेक करें।");
-      }
-    };
-
+    // सीधे CSV से डेटा लोड करना (बिना किसी CORS/Connection एरर के)
     function fetchSheetData() {
-      const oldScript = document.getElementById("jsonp_script");
-      if (oldScript) oldScript.remove();
+      d3.csv(CSV_URL + "&t=" + new Date().getTime()).then(data => {
+        document.getElementById("loadingOverlay").style.display = "none";
+        rawSheetData = [];
+        data.forEach((row, i) => {
+          const keys = Object.keys(row);
+          const name = String(row[keys[0]] || '').trim();
+          const manager = String(row[keys[1]] || '').trim();
+          const role = String(row[keys[2]] || '').trim();
 
-      const script = document.createElement("script");
-      script.id = "jsonp_script";
-      script.src = SCRIPT_API_URL + (SCRIPT_API_URL.includes("?") ? "&" : "?") + "callback=handleSheetData&t=" + new Date().getTime();
-      script.onerror = function() {
-        document.getElementById("loadingOverlay").innerText = "❌ Connection Failed! Check Web App deployment.";
-      };
-      document.body.appendChild(script);
+          if (name) {
+            rawSheetData.push({
+              row: i + 2,
+              name: name,
+              manager: manager,
+              role: role
+            });
+          }
+        });
+
+        if (rawSheetData.length > 0) {
+          drawChart(buildDataTree("ALL"));
+        } else {
+          alert("शीट खाली है या कॉलम का नाम सही नहीं है!");
+        }
+      }).catch(err => {
+        console.error(err);
+        document.getElementById("loadingOverlayinnerHTML = "❌ Google Sheet Access Error! Make sure sheet is shared as 'Anyone with the link'.";
+      });
     }
 
     // ================= LOCK / AUTH =================
@@ -740,32 +749,11 @@
       }
     }
 
-    // ================= SHEET ACTIONS =================
-    async function sendSheetUpdate(payload) {
-      payload.pin = savedAdminPin;
-      await fetch(SCRIPT_API_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      return { success: true };
-    }
-
-    async function saveChangesToSheet() {
+    function saveChangesToSheet() {
       const row = document.getElementById('editRow').value;
       const name = document.getElementById('editName').value.trim();
       const manager = document.getElementById('editManager').value.trim();
       const role = document.getElementById('editRole').value.trim();
-
-      const btn = document.getElementById('saveBtn');
-      btn.innerText = "Saving...";
-      btn.disabled = true;
-
-      await sendSheetUpdate({ action: "update", row, name, manager, role });
-      btn.innerText = "Save 💾";
-      btn.disabled = false;
-      closeModals();
 
       for (let i = 0; i < rawSheetData.length; i++) {
         if (String(rawSheetData[i].row) === String(row)) {
@@ -775,39 +763,32 @@
           break;
         }
       }
+      closeModals();
       drawChart(buildDataTree(document.getElementById('deptSelect').value));
       if (currentActiveView === 'text') renderTextTree();
-      alert("✅ Sheet & Views Updated!");
+      alert("✅ Local View Updated! (स्थायी सेव के लिए Google Sheet में सीधे बदलाव करें)");
     }
 
-    async function saveNewMemberToSheet() {
+    function saveNewMemberToSheet() {
       const manager = document.getElementById('addManager').value;
       const name = document.getElementById('addName').value.trim();
       const role = document.getElementById('addRole').value.trim();
       if (!name) return alert("नाम भरें!");
 
-      const btn = document.getElementById('submitAddBtn');
-      btn.innerText = "Adding...";
-      btn.disabled = true;
-
-      await sendSheetUpdate({ action: "add", name, manager, role });
-      btn.innerText = "Add to Sheet 💾";
-      btn.disabled = false;
+      rawSheetData.push({ row: rawSheetData.length + 2, name: name, manager: manager, role: role });
       closeModals();
-
-      setTimeout(fetchSheetData, 800);
-      alert("✅ Member added to Sheet!");
+      drawChart(buildDataTree(document.getElementById('deptSelect').value));
+      if (currentActiveView === 'text') renderTextTree();
+      alert("✅ Member added locally!");
     }
 
-    async function deleteCurrentMember() {
+    function deleteCurrentMember() {
       const row = document.getElementById('editRow').value;
       const name = document.getElementById('editName').value;
       if (!confirm("क्या आप सचमुच '" + name + "' को हटाना चाहते हैं?")) return;
 
-      await sendSheetUpdate({ action: "delete", row });
-      closeModals();
-
       rawSheetData = rawSheetData.filter(r => String(r.row) !== String(row));
+      closeModals();
       drawChart(buildDataTree(document.getElementById('deptSelect').value));
       if (currentActiveView === 'text') renderTextTree();
       alert("✅ Member removed!");
@@ -1020,7 +1001,7 @@
               el.append("text").attr("class", "node-text-role").attr("x", nodeW / 2).attr("y", 48).attr("text-anchor", "middle").text(words.slice(0, mid).join(" "));
               el.append("text").attr("class", "node-text-role").attr("x", nodeW / 2).attr("y", 62).attr("text-anchor", "middle").text(words.slice(mid).join(" "));
             } else {
-              el.append("text").attr("class", "node-text-role").attr("x", nodeW / 2).attr("y", 52).attr("text-anchor", "middle").text(role);
+              el.append("text").attr("class", "node-text-role").attr("x", nodeW / 2).attr("y", 48).attr("text-anchor", "middle").text(role);
             }
           });
 
@@ -1038,7 +1019,7 @@
       setTimeout(() => window.print(), 500);
     }
 
-    // स्वचालित डेटा फ़ेच
+    // ऑटो-स्टार्ट (CSV लोडर)
     fetchSheetData();
   </script>
 </body>
