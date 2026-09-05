@@ -1,7 +1,423 @@
-<script>
-    // आपकी Google Sheet ID (Public CSV Link - No Apps Script/CORS required)
-    const SHEET_ID = "11eT4oPnRCsPO-SQg4k48wL_J0sYFk8_EkmL5E8X6w0";
-    const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Org_Chart`;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MGC Org Hierarchy Chart</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+      background: #0f172a;
+      margin: 0;
+      padding: 12px;
+      color: #fff;
+    }
+    
+    .main-navbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #1e293b;
+      padding: 8px 14px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      border: 1px solid #334155;
+    }
+
+    .view-tabs { display: flex; gap: 8px; }
+    .tab-btn {
+      background: #0f172a;
+      color: #94a3b8;
+      border: 1px solid #334155;
+      padding: 7px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      transition: 0.2s;
+    }
+    .tab-btn.active {
+      background: #0284c7;
+      color: #ffffff;
+      border-color: #38bdf8;
+    }
+
+    .toolbar { 
+      display: flex; 
+      flex-wrap: wrap; 
+      gap: 8px; 
+      align-items: center; 
+      justify-content: space-between;
+      background: #1e293b; 
+      padding: 10px 14px; 
+      border-radius: 8px; 
+      margin-bottom: 10px;
+      border: 1px solid #334155;
+    }
+
+    .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    
+    select {
+      padding: 7px 10px;
+      background: #0f172a;
+      color: #f8fafc;
+      border: 1px solid #475569;
+      border-radius: 6px;
+      font-size: 12.5px;
+      outline: none;
+    }
+
+    .btn {
+      padding: 7px 13px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #ffffff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .btn-blue { background: #0284c7; }
+    .btn-green { background: #059669; }
+    .btn-equal { background: #0891b2; }
+    .btn-purple { background: #7c3aed; }
+    .btn-gray { background: #475569; }
+    .btn-red { background: #dc2626; }
+    .btn-booklet { background: #ea580c; font-weight: bold; }
+    .btn:hover { filter: brightness(1.15); }
+
+    .lock-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #334155;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      cursor: pointer;
+      color: #cbd5e1;
+      border: 1px solid #475569;
+      user-select: none;
+      transition: 0.2s;
+    }
+    .lock-badge:hover { filter: brightness(1.2); }
+    .lock-badge.unlocked {
+      background: #059669;
+      border-color: #10b981;
+      color: #ffffff;
+    }
+
+    #loadingOverlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 15px;
+      color: #38bdf8;
+      font-weight: 600;
+      background: #1e293b;
+      padding: 12px 24px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      z-index: 10;
+    }
+
+    #visualViewContainer {
+      width: 100%;
+      height: 80vh;
+      background: #ffffff;
+      border-radius: 8px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    #textViewContainer {
+      display: none;
+      width: 100%;
+      height: 80vh;
+      background: #000000;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 20px 25px;
+      overflow: auto;
+      white-space: pre;
+      font-family: 'Consolas', 'Courier New', Courier, monospace;
+      line-height: 1.6;
+      font-size: 13px;
+      color: #c9d1d9;
+    }
+
+    svg { width: 100%; height: 100%; cursor: grab; }
+    svg:active { cursor: grabbing; }
+
+    .link {
+      fill: none;
+      stroke: #94a3b8;
+      stroke-width: 2.2px;
+    }
+
+    .node { cursor: pointer; }
+    .node rect {
+      rx: 8px;
+      ry: 8px;
+      stroke-width: 1.5px;
+      filter: drop-shadow(0 3px 6px rgba(0,0,0,0.08));
+    }
+
+    .node-text-name {
+      font-size: 12px;
+      font-weight: 700;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      fill: #0f172a;
+      pointer-events: none;
+    }
+
+    .node-text-role {
+      font-size: 9.5px;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      fill: #64748b;
+      pointer-events: none;
+    }
+
+    .dept-title { color: #f0883e; font-weight: bold; }
+    .emp-role { color: #8b949e; }
+    .tree-branch { color: #64748b; font-weight: bold; }
+    .clickable-tree-node {
+      cursor: pointer;
+      transition: background 0.15s;
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+    .clickable-tree-node:hover {
+      background: #1e293b;
+      color: #38bdf8 !important;
+    }
+
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.65);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-box {
+      background: #1e293b;
+      padding: 22px;
+      border-radius: 10px;
+      width: 410px;
+      border: 1px solid #475569;
+    }
+    .modal-box h3 { margin: 0 0 14px 0; color: #38bdf8; font-size: 16px; }
+    .field { margin-bottom: 12px; }
+    .field label { display: block; font-size: 11px; color: #94a3b8; margin-bottom: 4px; }
+    .field input {
+      width: 100%;
+      padding: 8px 10px;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      color: #f8fafc;
+      font-size: 13px;
+      outline: none;
+    }
+    .modal-btns { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; }
+    .right-btns { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+
+    #printBookletContainer { display: none; background: #ffffff; }
+
+    @page {
+      size: A4 landscape;
+      margin: 6mm;
+    }
+
+    @media print {
+      .main-navbar, .toolbar, .modal-overlay { display: none !important; }
+      html, body {
+        background: #ffffff !important;
+        color: #000000 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      body.printing-text #textViewContainer {
+        display: block !important;
+        height: auto !important;
+        background: #ffffff !important;
+        color: #000000 !important;
+        border: none !important;
+        font-size: 11px !important;
+        line-height: 1.4 !important;
+        overflow: visible !important;
+      }
+      body.printing-text #textViewContainer * { color: #000000 !important; }
+      body.printing-text #visualViewContainer, body.printing-text #printBookletContainer { display: none !important; }
+
+      body.printing-visual #visualViewContainer {
+        display: block !important;
+        height: 100vh !important;
+        border: none !important;
+      }
+      body.printing-visual #textViewContainer, body.printing-visual #printBookletContainer { display: none !important; }
+
+      body.printing-booklet #printBookletContainer {
+        display: block !important;
+        width: 100% !important;
+      }
+      body.printing-booklet #visualViewContainer, body.printing-booklet #textViewContainer { display: none !important; }
+
+      .pdf-page {
+        width: 100% !important;
+        height: 190mm !important;
+        page-break-after: always !important;
+        break-after: page !important;
+        display: flex !important;
+        flex-direction: column !important;
+        padding: 4mm 6mm !important;
+        box-sizing: border-box !important;
+        background: #ffffff !important;
+        overflow: hidden !important;
+      }
+
+      .pdf-header {
+        width: 100% !important;
+        border-bottom: 2px solid #0284c7 !important;
+        padding-bottom: 4px !important;
+        margin-bottom: 8px !important;
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+      }
+      .pdf-header h2 { margin: 0 !important; font-size: 15px !important; color: #0284c7 !important; }
+      .pdf-header span { font-size: 11px !important; color: #64748b !important; font-weight: 600 !important; }
+
+      .pdf-svg-wrap {
+        width: 100% !important;
+        flex: 1 !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- मुख्य नेविगेशन -->
+  <div class="main-navbar">
+    <div class="view-tabs">
+      <button id="tabVisual" class="tab-btn active" onclick="switchMainView('visual')">🗂️ 1. Visual Org Chart</button>
+      <button id="tabText" class="tab-btn" onclick="switchMainView('text')">🌲 2. Monospace Text Tree</button>
+    </div>
+    <div class="lock-badge" id="adminLockBadge" onclick="handleLockBadgeClick()">
+      <span id="lockIcon">🔒</span> <span id="lockStatus">View Only (Click to Unlock)</span>
+    </div>
+  </div>
+
+  <!-- विज़ुअल टूलबार -->
+  <div class="toolbar" id="visualToolbar">
+    <div class="controls">
+      <select id="deptSelect" onchange="applyFilter(this.value)">
+        <option value="ALL">🏢 All Departments (Complete Matrix)</option>
+        <option value="MDO">📁 1. MDO Office</option>
+        <option value="IT">💻 2. IT Division</option>
+        <option value="HR">👥 3. HR & Admin</option>
+        <option value="Projects-Mech">🏗️ 4. Projects (Mechanical & JV)</option>
+        <option value="Projects-Ops">⚙️ 5. Projects (Operations - Choubisa Ji)</option>
+        <option value="Procurement">🛒 6. Procurement & Purchase</option>
+        <option value="Store">📦 7. Store HO</option>
+        <option value="Finance">📊 8. Finance & Accounts</option>
+        <option value="Deepak-Lead">💼 9. Executive Lead (Deepak Gadiya)</option>
+        <option value="ECom-Sales">🚚 10. E-Commerce & Regional Sales (Akshita Maliwal)</option>
+        <option value="Delhi-Sales">📍 11. Direct Regional Sales (Delhi Sales)</option>
+      </select>
+      <button class="btn btn-purple" onclick="toggleOrientation()">🔄 Toggle Layout</button>
+      <button class="btn btn-gray" onclick="resetZoom()">🎯 Fit Screen</button>
+    </div>
+    <div class="controls">
+      <button class="btn btn-booklet" onclick="generateAllDeptsPDF()">📑 Download 11-Page PDF Booklet</button>
+      <button class="btn btn-blue" onclick="downloadCrispSVG()">✨ Download SVG</button>
+      <button class="btn btn-green" onclick="downloadHD_PNG()">🖼️ Download High-Res PNG</button>
+      <button class="btn btn-gray" onclick="printCurrentView()">📥 Print View</button>
+    </div>
+  </div>
+
+  <!-- टेक्स्ट टूलबार -->
+  <div class="toolbar" id="textToolbar" style="display: none;">
+    <div class="controls"><span style="color:#58a6ff; font-weight:bold; font-size:13px;">🌲 Monospace Tree Mode</span></div>
+    <div class="controls">
+      <button class="btn btn-blue" onclick="copyTreeToClipboard()">📋 Copy Tree Text</button>
+      <button class="btn btn-green" onclick="downloadTextFile()">💾 Download as .TXT</button>
+      <button class="btn btn-gray" onclick="printCurrentView()">📥 Print / Save PDF</button>
+    </div>
+  </div>
+
+  <!-- चार्ट कंटेनर -->
+  <div id="visualViewContainer">
+    <div id="loadingOverlay">⏳ Connecting to Google Sheet...</div>
+    <svg id="chart_svg"></svg>
+  </div>
+
+  <div id="textViewContainer"></div>
+  <div id="printBookletContainer"></div>
+
+  <!-- पासवर्ड प्रमाणीकरण मोडल -->
+  <div id="authModal" class="modal-overlay">
+    <div class="modal-box" style="width: 320px;">
+      <h3>🔒 Admin Verification</h3>
+      <div class="field">
+        <label>Enter Admin PIN:</label>
+        <input type="password" id="adminPinInput" placeholder="Enter PIN (Default: 1234)" onkeypress="if(event.key==='Enter') verifyAndUnlock()">
+      </div>
+      <div class="modal-btns" style="justify-content: flex-end; gap: 8px;">
+        <button class="btn btn-gray" onclick="closeModals()">Cancel</button>
+        <button class="btn btn-blue" onclick="verifyAndUnlock()">Unlock 🔓</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- एडिट मोडल -->
+  <div id="editModal" class="modal-overlay">
+    <div class="modal-box">
+      <h3>⚙️ Manage Team Member</h3>
+      <input type="hidden" id="editRow">
+      <div class="field"><label>Employee Name:</label><input type="text" id="editName"></div>
+      <div class="field"><label>Reports To (Manager):</label><input type="text" id="editManager"></div>
+      <div class="field"><label>Designation / Role:</label><input type="text" id="editRole"></div>
+      <div class="modal-btns">
+        <button class="btn btn-red" id="delBtn" onclick="deleteCurrentMember()">🗑️ Delete</button>
+        <div class="right-btns">
+          <button class="btn btn-equal" onclick="openAddEqualMemberModal()">👥 Add Equal</button>
+          <button class="btn btn-green" onclick="openAddMemberModal()">➕ Add Down</button>
+          <button class="btn btn-blue" id="saveBtn" onclick="saveChangesToSheet()">Save 💾</button>
+          <button class="btn btn-gray" onclick="closeModals()">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ऐड मोडल -->
+  <div id="addModal" class="modal-overlay">
+    <div class="modal-box">
+      <h3 id="addModalHeading">➕ Add New Member</h3>
+      <div class="field"><label id="addManagerLabel">Reports To (Manager):</label><input type="text" id="addManager" readonly style="opacity: 0.85;"></div>
+      <div class="field"><label>New Employee Name:</label><input type="text" id="addName"></div>
+      <div class="field"><label>Designation / Role:</label><input type="text" id="addRole"></div>
+      <div class="modal-btns" style="justify-content: flex-end; gap: 8px;">
+        <button class="btn btn-gray" onclick="closeModals()">Cancel</button>
+        <button class="btn btn-green" id="submitAddBtn" onclick="saveNewMemberToSheet()">Add to Sheet 💾</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ================= LIVE APPS SCRIPT URL =================
+    const SCRIPT_API_URL = "https://script.google.com/macros/s/AKfycbxQE0Rn-C35D7Gso63YNdwUIJcPfrVPk_1f7FqDl6k4SSxXdu9mhNsw2WCsZllSsqARPaQ/exec";
 
     let rawSheetData = [];
     let currentActiveView = 'visual';
@@ -13,36 +429,28 @@
     let savedAdminPin = sessionStorage.getItem("mgc_admin_pin") || "";
     let pendingEditNode = null;
 
-    // CSV से डेटा सीधे लोड करना
+    // ================= JSONP DATA LOADER (NO CORS) =================
+    window.handleSheetData = function(result) {
+      document.getElementById("loadingOverlay").style.display = "none";
+      if (result && result.success && result.data && result.data.length > 0) {
+        rawSheetData = result.data;
+        drawChart(buildDataTree("ALL"));
+      } else {
+        alert("डेटा लोड नहीं हो पाया! कृपया Google Apps Script डिप्लॉयमेंट चेक करें।");
+      }
+    };
+
     function fetchSheetData() {
-      d3.csv(CSV_URL + "&t=" + new Date().getTime()).then(data => {
-        rawSheetData = [];
-        data.forEach((row, i) => {
-          // कॉलम नामों को सुरक्षित रूप से पढ़ना
-          const keys = Object.keys(row);
-          const name = String(row[keys[0]] || '').trim();
-          const manager = String(row[keys[1]] || '').trim();
-          const role = String(row[keys[2]] || '').trim();
+      const oldScript = document.getElementById("jsonp_script");
+      if (oldScript) oldScript.remove();
 
-          if (name) {
-            rawSheetData.push({
-              row: i + 2,
-              name: name,
-              manager: manager,
-              role: role
-            });
-          }
-        });
-
-        if (rawSheetData.length > 0) {
-          drawChart(buildDataTree("ALL"));
-        } else {
-          alert("शीट में कोई डेटा नहीं मिला! कृपया टैब का नाम 'Org_Chart' चेक करें।");
-        }
-      }).catch(err => {
-        console.error("CSV Load Error:", err);
-        alert("Google Sheet से कनेक्ट नहीं हो सका! सुनिश्चित करें कि Sheet की शेयरिंग 'Anyone with the link' पर सेट है।");
-      });
+      const script = document.createElement("script");
+      script.id = "jsonp_script";
+      script.src = SCRIPT_API_URL + (SCRIPT_API_URL.includes("?") ? "&" : "?") + "callback=handleSheetData&t=" + new Date().getTime();
+      script.onerror = function() {
+        document.getElementById("loadingOverlay").innerText = "❌ Connection Failed! Check Script URL.";
+      };
+      document.body.appendChild(script);
     }
 
     // ================= LOCK / AUTH =================
@@ -84,6 +492,7 @@
 
     function verifyAndUnlock() {
       const pin = document.getElementById("adminPinInput").value.trim();
+      if (!pin) return;
       if (pin === "1234") {
         savedAdminPin = pin;
         sessionStorage.setItem("mgc_admin_pin", pin);
@@ -300,25 +709,25 @@
         const key = node.name.trim().toLowerCase();
         const children = childrenMap[key] || [];
         const roleStr = node.role ? " <span class='emp-role'>(" + node.role + ")</span>" : "";
-        const clickAction = "onclick=\\"handleNodeClick('" + node.row + "', '" + escape(node.name) + "', '" + escape(node.manager) + "', '" + escape(node.role) + "')\\"";
+        const clickAction = "onclick=\"handleNodeClick('" + node.row + "', '" + escape(node.name) + "', '" + escape(node.manager) + "', '" + escape(node.role) + "')\"";
 
         if (!prefix) {
-          res += "<span class='dept-title clickable-tree-node' " + clickAction + ">[ " + node.name + " - " + node.role + " ]</span>\\n";
+          res += "<span class='dept-title clickable-tree-node' " + clickAction + ">[ " + node.name + " - " + node.role + " ]</span>\n";
         } else {
           const branch = isLast ? "└──► " : "├──► ";
           res += "<span class='tree-branch'>" + prefix + branch + "</span>" +
-                 "<span class='clickable-tree-node' " + clickAction + "><strong>" + node.name + "</strong>" + roleStr + "</span>\\n";
+                 "<span class='clickable-tree-node' " + clickAction + "><strong>" + node.name + "</strong>" + roleStr + "</span>\n";
         }
 
         for (let i = 0; i < children.length; i++) {
           const child = children[i];
           const lastChild = (i === children.length - 1);
-          const nextPrefix = prefix ? prefix + (isLast ? "      " : "│     ") : " │\\n ├──► ";
+          const nextPrefix = prefix ? prefix + (isLast ? "      " : "│     ") : " │\n ├──► ";
 
           if (!prefix) {
-            res += "<span class='tree-branch'> │\\n</span>";
-            const childClick = "onclick=\\"handleNodeClick('" + child.row + "', '" + escape(child.name) + "', '" + escape(child.manager) + "', '" + escape(child.role) + "')\\"";
-            res += "<span class='tree-branch'> ├──► </span><span class='dept-title clickable-tree-node' " + childClick + ">[ " + child.name + (child.role ? " - " + child.role : "") + " ]</span>\\n";
+            res += "<span class='tree-branch'> │\n</span>";
+            const childClick = "onclick=\"handleNodeClick('" + child.row + "', '" + escape(child.name) + "', '" + escape(child.manager) + "', '" + escape(child.role) + "')\"";
+            res += "<span class='tree-branch'> ├──► </span><span class='dept-title clickable-tree-node' " + childClick + ">[ " + child.name + (child.role ? " - " + child.role : "") + " ]</span>\n";
             const grand = childrenMap[child.name.trim().toLowerCase()] || [];
             for (let j = 0; j < grand.length; j++) {
               res += buildHtmlTree(grand[j], " │     ", j === grand.length - 1);
@@ -333,6 +742,79 @@
       if (root) {
         document.getElementById("textViewContainer").innerHTML = buildHtmlTree(root, "", true);
       }
+    }
+
+    // ================= SHEET ACTIONS =================
+    async function sendSheetUpdate(payload) {
+      payload.pin = savedAdminPin;
+      await fetch(SCRIPT_API_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      return { success: true };
+    }
+
+    async function saveChangesToSheet() {
+      const row = document.getElementById('editRow').value;
+      const name = document.getElementById('editName').value.trim();
+      const manager = document.getElementById('editManager').value.trim();
+      const role = document.getElementById('editRole').value.trim();
+
+      const btn = document.getElementById('saveBtn');
+      btn.innerText = "Saving...";
+      btn.disabled = true;
+
+      await sendSheetUpdate({ action: "update", row, name, manager, role });
+      btn.innerText = "Save 💾";
+      btn.disabled = false;
+      closeModals();
+
+      for (let i = 0; i < rawSheetData.length; i++) {
+        if (String(rawSheetData[i].row) === String(row)) {
+          rawSheetData[i].name = name;
+          rawSheetData[i].manager = manager;
+          rawSheetData[i].role = role;
+          break;
+        }
+      }
+      drawChart(buildDataTree(document.getElementById('deptSelect').value));
+      if (currentActiveView === 'text') renderTextTree();
+      alert("✅ Sheet & Views Updated!");
+    }
+
+    async function saveNewMemberToSheet() {
+      const manager = document.getElementById('addManager').value;
+      const name = document.getElementById('addName').value.trim();
+      const role = document.getElementById('addRole').value.trim();
+      if (!name) return alert("नाम भरें!");
+
+      const btn = document.getElementById('submitAddBtn');
+      btn.innerText = "Adding...";
+      btn.disabled = true;
+
+      await sendSheetUpdate({ action: "add", name, manager, role });
+      btn.innerText = "Add to Sheet 💾";
+      btn.disabled = false;
+      closeModals();
+
+      setTimeout(fetchSheetData, 800);
+      alert("✅ Member added to Sheet!");
+    }
+
+    async function deleteCurrentMember() {
+      const row = document.getElementById('editRow').value;
+      const name = document.getElementById('editName').value;
+      if (!confirm("क्या आप सचमुच '" + name + "' को हटाना चाहते हैं?")) return;
+
+      await sendSheetUpdate({ action: "delete", row });
+      closeModals();
+
+      rawSheetData = rawSheetData.filter(r => String(r.row) !== String(row));
+      drawChart(buildDataTree(document.getElementById('deptSelect').value));
+      if (currentActiveView === 'text') renderTextTree();
+      alert("✅ Member removed!");
     }
 
     function openEditModal(row, name, manager, role) {
@@ -370,51 +852,6 @@
       document.getElementById('addName').value = '';
       document.getElementById('addRole').value = '';
       document.getElementById('addModal').style.display = 'flex';
-    }
-
-    function saveChangesToSheet() {
-      const row = document.getElementById('editRow').value;
-      const name = document.getElementById('editName').value.trim();
-      const manager = document.getElementById('editManager').value.trim();
-      const role = document.getElementById('editRole').value.trim();
-
-      for (let i = 0; i < rawSheetData.length; i++) {
-        if (String(rawSheetData[i].row) === String(row)) {
-          rawSheetData[i].name = name;
-          rawSheetData[i].manager = manager;
-          rawSheetData[i].role = role;
-          break;
-        }
-      }
-      closeModals();
-      drawChart(buildDataTree(document.getElementById('deptSelect').value));
-      if (currentActiveView === 'text') renderTextTree();
-      alert("✅ View Updated! (शीट में स्थायी बदलाव के लिए Google Sheet खोलकर अपडेट करें)");
-    }
-
-    function saveNewMemberToSheet() {
-      const manager = document.getElementById('addManager').value;
-      const name = document.getElementById('addName').value.trim();
-      const role = document.getElementById('addRole').value.trim();
-      if (!name) return alert("नाम भरें!");
-
-      rawSheetData.push({ row: rawSheetData.length + 2, name: name, manager: manager, role: role });
-      closeModals();
-      drawChart(buildDataTree(document.getElementById('deptSelect').value));
-      if (currentActiveView === 'text') renderTextTree();
-      alert("✅ Member added locally to chart!");
-    }
-
-    function deleteCurrentMember() {
-      const row = document.getElementById('editRow').value;
-      const name = document.getElementById('editName').value;
-      if (!confirm("क्या आप सचमुच '" + name + "' को हटाना चाहते हैं?")) return;
-
-      rawSheetData = rawSheetData.filter(r => String(r.row) !== String(row));
-      closeModals();
-      drawChart(buildDataTree(document.getElementById('deptSelect').value));
-      if (currentActiveView === 'text') renderTextTree();
-      alert("✅ Member removed locally!");
     }
 
     function resetZoom() {
@@ -472,7 +909,7 @@
       clonedSvg.setAttribute("viewBox", (bounds.x - padding) + " " + (bounds.y - padding) + " " + width + " " + height);
       clonedSvg.querySelector("g").removeAttribute("transform");
       const serializer = new XMLSerializer();
-      const source = '<?xml version="1.0" standalone="no"?>\\r\\n' + serializer.serializeToString(clonedSvg);
+      const source = '<?xml version="1.0" standalone="no"?>\r\n' + serializer.serializeToString(clonedSvg);
       const a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([source], {type: "image/svg+xml;charset=utf-8"}));
       a.download = "Org_Chart_Complete.svg";
@@ -608,3 +1045,5 @@
     // ऑटो-स्टार्ट
     fetchSheetData();
   </script>
+</body>
+</html>
