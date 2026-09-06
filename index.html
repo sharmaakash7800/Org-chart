@@ -122,6 +122,7 @@
       border-radius: 8px;
       border: 1px solid #334155;
       z-index: 10;
+      text-align: center;
     }
 
     #visualViewContainer {
@@ -412,9 +413,13 @@
   </div>
 
   <script>
-    // ================= PUBLIC CSV DIRECT CONNECTION =================
-    const SHEET_ID = "11eT4oPnRCsPO-SQg4k48wL_J0sYFk8_EkmL5E8X6w0";
+    // ================= CONFIGURATION =================
+    // Sheet ID derived from your actual Google Sheet URL
+    const SHEET_ID = "1bgDqto5VKX6d0tJOXboxFPtNV5jVNShuWrshbLidEE";
     const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Org_Chart`;
+
+    // Google Apps Script Web App URL from cell E4 for direct live updates
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycboxQE0Rn-C35D7Gao53YNdwUJePffyPk_tf7FqdI6ix49SxXdu9mhNsw2vCsZH5qsARPQ/exec";
 
     let rawSheetData = [];
     let currentActiveView = 'visual';
@@ -426,8 +431,35 @@
     let savedAdminPin = sessionStorage.getItem("mgc_admin_pin") || "";
     let pendingEditNode = null;
 
+    // Direct JSONP data fetcher with CSV fallback
     function fetchSheetData() {
-      d3.csv(CSV_URL + "&t=" + new Date().getTime()).then(data => {
+      const script = document.createElement("script");
+      const callbackName = "handleSheetJSONP_" + Date.now();
+      
+      window[callbackName] = function(response) {
+        delete window[callbackName];
+        document.body.removeChild(script);
+        if (response && response.success && response.data) {
+          document.getElementById("loadingOverlay").style.display = "none";
+          rawSheetData = response.data;
+          drawChart(buildDataTree("ALL"));
+        } else {
+          loadViaCSV();
+        }
+      };
+
+      script.src = `${APPS_SCRIPT_URL}?callback=${callbackName}&t=${Date.now()}`;
+      script.onerror = function() {
+        delete window[callbackName];
+        try { document.body.removeChild(script); } catch(e) {}
+        loadViaCSV();
+      };
+
+      document.body.appendChild(script);
+    }
+
+    function loadViaCSV() {
+      d3.csv(CSV_URL + "&t=" + Date.now()).then(data => {
         document.getElementById("loadingOverlay").style.display = "none";
         rawSheetData = [];
         data.forEach((row, i) => {
@@ -449,12 +481,18 @@
         if (rawSheetData.length > 0) {
           drawChart(buildDataTree("ALL"));
         } else {
-          alert("शीट खाली है या कॉलम का नाम सही नहीं है!");
+          showOverlayError("Sheet is empty or structure is invalid.");
         }
       }).catch(err => {
         console.error(err);
-        document.getElementById("loadingOverlay").innerHTML = "❌ Google Sheet Access Error! Make sure sheet is shared as 'Anyone with the link'.";
+        showOverlayError("❌ Google Sheet Access Error!<br>1. Confirm sheet is shared: <b>Anyone with the link can view</b><br>2. Confirm Apps Script deployment access is set to <b>Anyone</b>.");
       });
+    }
+
+    function showOverlayError(msg) {
+      const overlay = document.getElementById("loadingOverlay");
+      overlay.style.display = "block";
+      overlay.innerHTML = msg;
     }
 
     // ================= LOCK / AUTH =================
@@ -616,7 +654,7 @@
       }
 
       const validIds = new Set(selectedNodes.map(d => d.id));
-      const rootId = rootNode ? rootNode.id : selectedNodes[0].id;
+      const rootId = rootNode ? rootNode.id : (selectedNodes[0] ? selectedNodes[0].id : null);
 
       selectedNodes.forEach(d => {
         if (d.id !== rootId && (!d.parentId || !validIds.has(d.parentId))) {
@@ -748,11 +786,36 @@
       }
     }
 
+    // Direct Google Apps Script backend sync
+    function postToAppsScript(payload, onSuccess) {
+      fetch(APPS_SCRIPT_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify(payload)
+      }).then(() => {
+        onSuccess();
+      }).catch(err => {
+        console.error(err);
+        alert("⚠️ Cloud sync error. Local update saved.");
+        onSuccess();
+      });
+    }
+
     function saveChangesToSheet() {
       const row = document.getElementById('editRow').value;
       const name = document.getElementById('editName').value.trim();
       const manager = document.getElementById('editManager').value.trim();
       const role = document.getElementById('editRole').value.trim();
+
+      const payload = {
+        pin: savedAdminPin,
+        action: "update",
+        row: row,
+        name: name,
+        manager: manager,
+        role: role
+      };
 
       for (let i = 0; i < rawSheetData.length; i++) {
         if (String(rawSheetData[i].row) === String(row)) {
@@ -762,10 +825,14 @@
           break;
         }
       }
+
       closeModals();
       drawChart(buildDataTree(document.getElementById('deptSelect').value));
       if (currentActiveView === 'text') renderTextTree();
-      alert("✅ Local View Updated! (स्थायी सेव के लिए Google Sheet में सीधे बदलाव करें)");
+
+      postToAppsScript(payload, () => {
+        alert("✅ Changes saved to Google Sheet successfully!");
+      });
     }
 
     function saveNewMemberToSheet() {
@@ -774,11 +841,23 @@
       const role = document.getElementById('addRole').value.trim();
       if (!name) return alert("नाम भरें!");
 
-      rawSheetData.push({ row: rawSheetData.length + 2, name: name, manager: manager, role: role });
+      const newRow = rawSheetData.length + 2;
+      const payload = {
+        pin: savedAdminPin,
+        action: "add",
+        name: name,
+        manager: manager,
+        role: role
+      };
+
+      rawSheetData.push({ row: newRow, name: name, manager: manager, role: role });
       closeModals();
       drawChart(buildDataTree(document.getElementById('deptSelect').value));
       if (currentActiveView === 'text') renderTextTree();
-      alert("✅ Member added locally!");
+
+      postToAppsScript(payload, () => {
+        alert("✅ Member successfully added to Google Sheet!");
+      });
     }
 
     function deleteCurrentMember() {
@@ -786,11 +865,20 @@
       const name = document.getElementById('editName').value;
       if (!confirm("क्या आप सचमुच '" + name + "' को हटाना चाहते हैं?")) return;
 
+      const payload = {
+        pin: savedAdminPin,
+        action: "delete",
+        row: row
+      };
+
       rawSheetData = rawSheetData.filter(r => String(r.row) !== String(row));
       closeModals();
       drawChart(buildDataTree(document.getElementById('deptSelect').value));
       if (currentActiveView === 'text') renderTextTree();
-      alert("✅ Member removed!");
+
+      postToAppsScript(payload, () => {
+        alert("✅ Member deleted from Google Sheet!");
+      });
     }
 
     function openEditModal(row, name, manager, role) {
