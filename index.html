@@ -414,9 +414,8 @@
   </div>
 
   <script>
-    // ================= UP-TO-DATE DEPLOYMENT CONFIG =================
-    // Updated with your Version 4 Web App Deployment URL
-    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxVGKfzV721DAeYgGkQs72iCW2IspVOHEiEKbAc09orfr5i07F6lEVKzVuVE66mEx8ohw/exec";
+    // Configured with the latest Web App URL
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyZsuTVpO8A83-dpaA9KBTDIXT5hMk5HcPT8O6ckzijY0mwlzNZnlLWl-3KC_HwtcUhcw/exec";
     const SHEET_ID = "1bgDqto5VKX6d0tJOXboxFPtNV5jVNShuWrshbLidEE";
 
     let rawSheetData = [];
@@ -429,75 +428,67 @@
     let savedAdminPin = sessionStorage.getItem("mgc_admin_pin") || "";
     let pendingEditNode = null;
 
-    // JSONP loader bypasses CORS cleanly in browser
-    function fetchSheetData() {
-      const callbackName = "cb_" + Math.floor(Math.random() * 1000000);
-      const script = document.createElement("script");
-      let timedOut = false;
+    async function fetchSheetData() {
+      try {
+        const response = await fetch(APPS_SCRIPT_URL, {
+          method: "GET",
+          redirect: "follow"
+        });
+        const result = await response.json();
 
-      const timeoutId = setTimeout(() => {
-        timedOut = true;
-        loadViaCSVExport();
-      }, 5000);
-
-      window[callbackName] = function(response) {
-        clearTimeout(timeoutId);
-        if (timedOut) return;
-        delete window[callbackName];
-        if (script.parentNode) script.parentNode.removeChild(script);
-
-        if (response && response.success && response.data && response.data.length > 0) {
+        if (result && result.success && Array.isArray(result.data) && result.data.length > 0) {
+          rawSheetData = result.data;
           document.getElementById("loadingOverlay").style.display = "none";
-          rawSheetData = response.data;
           drawChart(buildDataTree("ALL"));
         } else {
-          loadViaCSVExport();
+          fallbackGoogleVisualization();
         }
-      };
-
-      script.src = `${APPS_SCRIPT_URL}?callback=${callbackName}&t=${Date.now()}`;
-      script.onerror = function() {
-        clearTimeout(timeoutId);
-        if (timedOut) return;
-        delete window[callbackName];
-        if (script.parentNode) script.parentNode.removeChild(script);
-        loadViaCSVExport();
-      };
-
-      document.body.appendChild(script);
+      } catch (err) {
+        console.warn("Apps Script GET failed, trying fallback...", err);
+        fallbackGoogleVisualization();
+      }
     }
 
-    // Direct Sheet CSV Export Fallback (gid=0 Org_Chart)
-    function loadViaCSVExport() {
-      const exportUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&id=${SHEET_ID}&gid=0&t=${Date.now()}`;
-      d3.csv(exportUrl).then(data => {
-        document.getElementById("loadingOverlay").style.display = "none";
-        rawSheetData = [];
-        data.forEach((row, i) => {
-          const keys = Object.keys(row);
-          const name = String(row[keys[0]] || '').trim();
-          const manager = String(row[keys[1]] || '').trim();
-          const role = String(row[keys[2]] || '').trim();
+    function fallbackGoogleVisualization() {
+      const gvizUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=Org_Chart`;
 
-          if (name) {
-            rawSheetData.push({
-              row: i + 2,
-              name: name,
-              manager: manager,
-              role: role
+      fetch(gvizUrl)
+        .then(res => res.text())
+        .then(text => {
+          const jsonText = text.substring(text.indexOf("{"), text.lastIndexOf("}") + 1);
+          const data = JSON.parse(jsonText);
+          rawSheetData = [];
+
+          if (data && data.table && data.table.rows) {
+            data.table.rows.forEach((row, i) => {
+              if (row.c) {
+                const name = row.c[0] ? String(row.c[0].v || '').trim() : '';
+                const manager = row.c[1] ? String(row.c[1].v || '').trim() : '';
+                const role = row.c[2] ? String(row.c[2].v || '').trim() : '';
+
+                if (name && name.toLowerCase() !== "employee name") {
+                  rawSheetData.push({
+                    row: i + 2,
+                    name: name,
+                    manager: manager,
+                    role: role
+                  });
+                }
+              }
             });
           }
-        });
 
-        if (rawSheetData.length > 0) {
-          drawChart(buildDataTree("ALL"));
-        } else {
-          showOverlayError("Sheet is empty or structure is invalid.");
-        }
-      }).catch(err => {
-        console.error(err);
-        showOverlayError("❌ Sheet Load Error.<br>Please open your Google Sheet > click <b>Share</b> > ensure General access is set to <b>Anyone with the link can view</b>.");
-      });
+          if (rawSheetData.length > 0) {
+            document.getElementById("loadingOverlay").style.display = "none";
+            drawChart(buildDataTree("ALL"));
+          } else {
+            showOverlayError("Sheet data is empty.");
+          }
+        })
+        .catch(err => {
+          console.error("Fetch mechanisms failed", err);
+          showOverlayError("❌ Sheet Load Error.<br>Please verify Google Sheet access permissions.");
+        });
     }
 
     function showOverlayError(msg) {
@@ -506,7 +497,6 @@
       overlay.innerHTML = msg;
     }
 
-    // ================= LOCK / AUTH =================
     function updateLockUI() {
       const badge = document.getElementById("adminLockBadge");
       const icon = document.getElementById("lockIcon");
@@ -797,7 +787,6 @@
       }
     }
 
-    // Direct Google Apps Script backend update call
     function postToAppsScript(payload, onSuccess) {
       fetch(APPS_SCRIPT_URL, {
         method: "POST",
@@ -1116,7 +1105,6 @@
       setTimeout(() => window.print(), 500);
     }
 
-    // Auto-start fetcher
     fetchSheetData();
   </script>
 </body>
