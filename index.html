@@ -414,7 +414,6 @@
   </div>
 
   <script>
-    // Configured with the latest Web App URL
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyZsuTVpO8A83-dpaA9KBTDIXT5hMk5HcPT8O6ckzijY0mwlzNZnlLWl-3KC_HwtcUhcw/exec";
     const SHEET_ID = "1bgDqto5VKX6d0tJOXboxFPtNV5jVNShuWrshbLidEE";
 
@@ -428,67 +427,53 @@
     let savedAdminPin = sessionStorage.getItem("mgc_admin_pin") || "";
     let pendingEditNode = null;
 
-    async function fetchSheetData() {
-      try {
-        const response = await fetch(APPS_SCRIPT_URL, {
-          method: "GET",
-          redirect: "follow"
-        });
-        const result = await response.json();
+    // Load data with JSONP Script Injection (Bypasses all CORS blocks)
+    function fetchSheetData() {
+      const callbackName = "onGoogleSheetDataLoaded";
+      
+      window[callbackName] = function(json) {
+        if (!json || !json.table || !json.table.rows) {
+          showOverlayError("⚠️ Sheet is empty or data format is invalid.");
+          return;
+        }
 
-        if (result && result.success && Array.isArray(result.data) && result.data.length > 0) {
-          rawSheetData = result.data;
+        rawSheetData = [];
+        const rows = json.table.rows;
+
+        for (let i = 0; i < rows.length; i++) {
+          const cells = rows[i].c;
+          if (!cells) continue;
+
+          const name = cells[0] && cells[0].v !== null ? String(cells[0].v).trim() : '';
+          const manager = cells[1] && cells[1].v !== null ? String(cells[1].v).trim() : '';
+          const role = cells[2] && cells[2].v !== null ? String(cells[2].v).trim() : '';
+
+          if (name && !name.toLowerCase().includes("employee name")) {
+            rawSheetData.push({
+              row: i + 2,
+              name: name,
+              manager: manager,
+              role: role
+            });
+          }
+        }
+
+        if (rawSheetData.length > 0) {
           document.getElementById("loadingOverlay").style.display = "none";
           drawChart(buildDataTree("ALL"));
         } else {
-          fallbackGoogleVisualization();
+          showOverlayError("⚠️ No employee records found in sheet.");
         }
-      } catch (err) {
-        console.warn("Apps Script GET failed, trying fallback...", err);
-        fallbackGoogleVisualization();
-      }
-    }
+      };
 
-    function fallbackGoogleVisualization() {
-      const gvizUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=Org_Chart`;
+      const gvizScript = document.createElement("script");
+      gvizScript.src = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=responseHandler:${callbackName}&sheet=Org_Chart&t=${Date.now()}`;
+      
+      gvizScript.onerror = function() {
+        showOverlayError("❌ Cannot access sheet.<br>Confirm that in Google Sheet > <b>Share</b> is set to: <b>Anyone with the link can view</b>.");
+      };
 
-      fetch(gvizUrl)
-        .then(res => res.text())
-        .then(text => {
-          const jsonText = text.substring(text.indexOf("{"), text.lastIndexOf("}") + 1);
-          const data = JSON.parse(jsonText);
-          rawSheetData = [];
-
-          if (data && data.table && data.table.rows) {
-            data.table.rows.forEach((row, i) => {
-              if (row.c) {
-                const name = row.c[0] ? String(row.c[0].v || '').trim() : '';
-                const manager = row.c[1] ? String(row.c[1].v || '').trim() : '';
-                const role = row.c[2] ? String(row.c[2].v || '').trim() : '';
-
-                if (name && name.toLowerCase() !== "employee name") {
-                  rawSheetData.push({
-                    row: i + 2,
-                    name: name,
-                    manager: manager,
-                    role: role
-                  });
-                }
-              }
-            });
-          }
-
-          if (rawSheetData.length > 0) {
-            document.getElementById("loadingOverlay").style.display = "none";
-            drawChart(buildDataTree("ALL"));
-          } else {
-            showOverlayError("Sheet data is empty.");
-          }
-        })
-        .catch(err => {
-          console.error("Fetch mechanisms failed", err);
-          showOverlayError("❌ Sheet Load Error.<br>Please verify Google Sheet access permissions.");
-        });
+      document.head.appendChild(gvizScript);
     }
 
     function showOverlayError(msg) {
@@ -1105,6 +1090,7 @@
       setTimeout(() => window.print(), 500);
     }
 
+    // Auto-start fetcher
     fetchSheetData();
   </script>
 </body>
