@@ -53,7 +53,7 @@
       background: #1e293b; 
       padding: 10px 14px; 
       border-radius: 8px; 
-      margin-bottom: 10px;
+      margin-bottom: 10px; 
       border: 1px solid #334155;
     }
 
@@ -426,7 +426,6 @@
     let savedAdminPin = sessionStorage.getItem("mgc_admin_pin") || "";
     let pendingEditNode = null;
 
-    // सीधे CSV से डेटा लोड करना (बिना किसी CORS/Connection एरर के)
     function fetchSheetData() {
       d3.csv(CSV_URL + "&t=" + new Date().getTime()).then(data => {
         document.getElementById("loadingOverlay").style.display = "none";
@@ -454,7 +453,7 @@
         }
       }).catch(err => {
         console.error(err);
-        document.getElementById("loadingOverlayinnerHTML = "❌ Google Sheet Access Error! Make sure sheet is shared as 'Anyone with the link'.";
+        document.getElementById("loadingOverlay").innerHTML = "❌ Google Sheet Access Error! Make sure sheet is shared as 'Anyone with the link'.";
       });
     }
 
@@ -1019,7 +1018,7 @@
       setTimeout(() => window.print(), 500);
     }
 
-    // ऑटो-स्टार्ट (CSV लोडर)
+    // Auto-start loader
     fetchSheetData();
   </script>
 </body>
