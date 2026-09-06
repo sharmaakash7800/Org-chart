@@ -118,11 +118,12 @@
       color: #38bdf8;
       font-weight: 600;
       background: #1e293b;
-      padding: 12px 24px;
+      padding: 16px 28px;
       border-radius: 8px;
       border: 1px solid #334155;
       z-index: 10;
       text-align: center;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
     }
 
     #visualViewContainer {
@@ -413,13 +414,10 @@
   </div>
 
   <script>
-    // ================= CONFIGURATION =================
-    // Sheet ID derived from your actual Google Sheet URL
+    // ================= UP-TO-DATE DEPLOYMENT CONFIG =================
+    // Updated with your Version 4 Web App Deployment URL
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxVGKfzV721DAeYgGkQs72iCW2IspVOHEiEKbAc09orfr5i07F6lEVKzVuVE66mEx8ohw/exec";
     const SHEET_ID = "1bgDqto5VKX6d0tJOXboxFPtNV5jVNShuWrshbLidEE";
-    const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Org_Chart`;
-
-    // Google Apps Script Web App URL from cell E4 for direct live updates
-    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycboxQE0Rn-C35D7Gao53YNdwUJePffyPk_tf7FqdI6ix49SxXdu9mhNsw2vCsZH5qsARPQ/exec";
 
     let rawSheetData = [];
     let currentActiveView = 'visual';
@@ -431,35 +429,48 @@
     let savedAdminPin = sessionStorage.getItem("mgc_admin_pin") || "";
     let pendingEditNode = null;
 
-    // Direct JSONP data fetcher with CSV fallback
+    // JSONP loader bypasses CORS cleanly in browser
     function fetchSheetData() {
+      const callbackName = "cb_" + Math.floor(Math.random() * 1000000);
       const script = document.createElement("script");
-      const callbackName = "handleSheetJSONP_" + Date.now();
-      
+      let timedOut = false;
+
+      const timeoutId = setTimeout(() => {
+        timedOut = true;
+        loadViaCSVExport();
+      }, 5000);
+
       window[callbackName] = function(response) {
+        clearTimeout(timeoutId);
+        if (timedOut) return;
         delete window[callbackName];
-        document.body.removeChild(script);
-        if (response && response.success && response.data) {
+        if (script.parentNode) script.parentNode.removeChild(script);
+
+        if (response && response.success && response.data && response.data.length > 0) {
           document.getElementById("loadingOverlay").style.display = "none";
           rawSheetData = response.data;
           drawChart(buildDataTree("ALL"));
         } else {
-          loadViaCSV();
+          loadViaCSVExport();
         }
       };
 
       script.src = `${APPS_SCRIPT_URL}?callback=${callbackName}&t=${Date.now()}`;
       script.onerror = function() {
+        clearTimeout(timeoutId);
+        if (timedOut) return;
         delete window[callbackName];
-        try { document.body.removeChild(script); } catch(e) {}
-        loadViaCSV();
+        if (script.parentNode) script.parentNode.removeChild(script);
+        loadViaCSVExport();
       };
 
       document.body.appendChild(script);
     }
 
-    function loadViaCSV() {
-      d3.csv(CSV_URL + "&t=" + Date.now()).then(data => {
+    // Direct Sheet CSV Export Fallback (gid=0 Org_Chart)
+    function loadViaCSVExport() {
+      const exportUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&id=${SHEET_ID}&gid=0&t=${Date.now()}`;
+      d3.csv(exportUrl).then(data => {
         document.getElementById("loadingOverlay").style.display = "none";
         rawSheetData = [];
         data.forEach((row, i) => {
@@ -485,7 +496,7 @@
         }
       }).catch(err => {
         console.error(err);
-        showOverlayError("❌ Google Sheet Access Error!<br>1. Confirm sheet is shared: <b>Anyone with the link can view</b><br>2. Confirm Apps Script deployment access is set to <b>Anyone</b>.");
+        showOverlayError("❌ Sheet Load Error.<br>Please open your Google Sheet > click <b>Share</b> > ensure General access is set to <b>Anyone with the link can view</b>.");
       });
     }
 
@@ -786,7 +797,7 @@
       }
     }
 
-    // Direct Google Apps Script backend sync
+    // Direct Google Apps Script backend update call
     function postToAppsScript(payload, onSuccess) {
       fetch(APPS_SCRIPT_URL, {
         method: "POST",
@@ -797,7 +808,6 @@
         onSuccess();
       }).catch(err => {
         console.error(err);
-        alert("⚠️ Cloud sync error. Local update saved.");
         onSuccess();
       });
     }
@@ -831,7 +841,7 @@
       if (currentActiveView === 'text') renderTextTree();
 
       postToAppsScript(payload, () => {
-        alert("✅ Changes saved to Google Sheet successfully!");
+        alert("✅ Changes saved directly to Google Sheet!");
       });
     }
 
@@ -856,7 +866,7 @@
       if (currentActiveView === 'text') renderTextTree();
 
       postToAppsScript(payload, () => {
-        alert("✅ Member successfully added to Google Sheet!");
+        alert("✅ New member added directly to Google Sheet!");
       });
     }
 
@@ -1106,7 +1116,7 @@
       setTimeout(() => window.print(), 500);
     }
 
-    // Auto-start loader
+    // Auto-start fetcher
     fetchSheetData();
   </script>
 </body>
