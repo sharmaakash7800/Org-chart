@@ -414,8 +414,8 @@
   </div>
 
   <script>
-    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyZsuTVpO8A83-dpaA9KBTDIXT5hMk5HcPT8O6ckzijY0mwlzNZnlLWl-3KC_HwtcUhcw/exec";
-    const SHEET_ID = "1bgDqto5VKX6d0tJOXboxFPtNV5jVNShuWrshbLidEE";
+    // Updated with your latest Web App deployment URL
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzVFkobRTomTxxt8co7p43S6ebyduMAKwTq-7eOVIngmkKIaxjlrDu-avPfxcAi4N7g/exec";
 
     let rawSheetData = [];
     let currentActiveView = 'visual';
@@ -427,53 +427,27 @@
     let savedAdminPin = sessionStorage.getItem("mgc_admin_pin") || "";
     let pendingEditNode = null;
 
-    // Load data with JSONP Script Injection (Bypasses all CORS blocks)
+    // Load data directly via Apps Script JSONP script injection
     function fetchSheetData() {
-      const callbackName = "onGoogleSheetDataLoaded";
-      
-      window[callbackName] = function(json) {
-        if (!json || !json.table || !json.table.rows) {
-          showOverlayError("⚠️ Sheet is empty or data format is invalid.");
-          return;
-        }
+      const callbackName = "onGoogleAppsScriptLoaded";
 
-        rawSheetData = [];
-        const rows = json.table.rows;
-
-        for (let i = 0; i < rows.length; i++) {
-          const cells = rows[i].c;
-          if (!cells) continue;
-
-          const name = cells[0] && cells[0].v !== null ? String(cells[0].v).trim() : '';
-          const manager = cells[1] && cells[1].v !== null ? String(cells[1].v).trim() : '';
-          const role = cells[2] && cells[2].v !== null ? String(cells[2].v).trim() : '';
-
-          if (name && !name.toLowerCase().includes("employee name")) {
-            rawSheetData.push({
-              row: i + 2,
-              name: name,
-              manager: manager,
-              role: role
-            });
-          }
-        }
-
-        if (rawSheetData.length > 0) {
+      window[callbackName] = function(response) {
+        if (response && response.success && Array.isArray(response.data) && response.data.length > 0) {
+          rawSheetData = response.data;
           document.getElementById("loadingOverlay").style.display = "none";
           drawChart(buildDataTree("ALL"));
         } else {
-          showOverlayError("⚠️ No employee records found in sheet.");
+          showOverlayError("⚠️ Sheet is empty or no employee records were returned.");
         }
       };
 
-      const gvizScript = document.createElement("script");
-      gvizScript.src = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=responseHandler:${callbackName}&sheet=Org_Chart&t=${Date.now()}`;
-      
-      gvizScript.onerror = function() {
-        showOverlayError("❌ Cannot access sheet.<br>Confirm that in Google Sheet > <b>Share</b> is set to: <b>Anyone with the link can view</b>.");
+      const scriptTag = document.createElement("script");
+      scriptTag.src = `${APPS_SCRIPT_URL}?callback=${callbackName}&t=${Date.now()}`;
+      scriptTag.onerror = function() {
+        showOverlayError("❌ Apps Script Connection Error.<br>Make sure the Web App deployment has <b>Who has access</b> set to <b>Anyone</b>.");
       };
 
-      document.head.appendChild(gvizScript);
+      document.head.appendChild(scriptTag);
     }
 
     function showOverlayError(msg) {
